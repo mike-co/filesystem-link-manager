@@ -57,6 +57,9 @@ Thumbs.db
 .yarnrc
 vsc-extension-quickstart.md
 .gitignore
+.prettierignore
+.vscode-test.mjs
+eslint.config.mts
 
 # -----------------------------
 # Keep these files in the package:
