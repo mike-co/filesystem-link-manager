@@ -1,0 +1,231 @@
+{
+  "name": "filesystem-link-manager",
+  "displayName": "FileSystem Link Manager",
+  "description": "Extension for managing file system links—symlinks, hard links, and junctions—across repositories and workspaces, with automated workspace setup and command execution.",
+  "version": "0.0.1",
+  "publisher": "mike-co",
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "filesystemLinkManager.executeFromSettings",
+        "title": "Execute from Settings",
+        "category": "FileSystem Link Manager"
+      },
+      {
+        "command": "filesystemLinkManager.executeFromConfigFile",
+        "title": "Execute from Config File",
+        "category": "FileSystem Link Manager"
+      },
+      {
+        "command": "filesystemLinkManager.setLogLevel",
+        "title": "Set Log Level",
+        "category": "FileSystem Link Manager"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+       
+      ],
+      "explorer/context": [
+      ]
+    },
+    "configuration": {
+      "title": "FileSystem Link Manager",
+      "properties": {
+        "filesystemLinkManager.config.targetDirectoryPath": {
+          "type": "string",
+          "default": ".",
+          "description": "Absolute or workspace-relative path to the destination directory."
+        },
+        "filesystemLinkManager.config.silentMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Suppress user prompts for overwrite decisions."
+        },
+        "filesystemLinkManager.config.defaultOverwriteBehavior": {
+          "type": "string",
+          "enum": ["overwrite", "skip", "error"],
+          "default": "overwrite",
+          "description": "Default action for file/directory conflicts in silent mode."
+        },
+        "filesystemLinkManager.config.operations": {
+          "type": "array",
+          "default": [],
+          "description": "Array of file system operations for files and directories (symlinks, hardlinks, copies).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["symlink", "hardlink", "copy"],
+                "description": "Type of file system operation to perform"
+              },
+              "itemType": {
+                "type": "string",
+                "enum": ["file", "directory"],
+                "description": "Type of item to operate on: file or directory"
+              },
+              "baseDirectoryPath": {
+                "type": "string",
+                "description": "Base directory path for searching source files or directories"
+              },
+              "searchPatterns": {
+                "type": "array",
+                "description": "Patterns for matching files or directories",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "patternType": {
+                      "type": "string",
+                      "enum": ["regex", "glob", "ignore-rules-file-path"],
+                      "description": "Type of pattern for file matching"
+                    },
+                    "pattern": {
+                      "type": "string",
+                      "description": "Pattern for matching files or path to ignore rules file"
+                    }
+                  },
+                  "required": ["patternType", "pattern"]
+                }
+              },
+              "destinationPath": {
+                "type": "string",
+                "description": "Optional destination path relative to target directory"
+              },
+              "fileAttributeAdjustment": {
+                "type": "object",
+                "description": "Optional file attribute adjustments for cross-platform compatibility",
+                "properties": {
+                  "readonly": {
+                    "type": "string",
+                    "enum": ["set", "remove", "preserve"],
+                    "description": "Readonly attribute adjustment: set (make readonly), remove (make writable), or preserve (keep current)"
+                  },
+                  "backupFilePath": {
+                    "type": "string",
+                    "description": "Optional path for backup CSV file to enable rollback of attribute changes"
+                  }
+                }
+              }
+            },
+            "required": ["action", "itemType", "baseDirectoryPath", "searchPatterns"]
+          }
+        },
+        "filesystemLinkManager.config.postExecutionCommands": {
+          "type": "array",
+          "default": [],
+          "description": "Shell commands to execute after symlink operations.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Shell command to execute"
+              },
+              "description": {
+                "type": "string",
+                "description": "Optional description of the command"
+              }
+            },
+            "required": ["command"]
+          }
+        },
+        "filesystemLinkManager.config.fileCountPromptThreshold": {
+          "type": "number",
+          "default": 749,
+          "description": "Maximum allowed files and links before prompting user for confirmation."
+        },
+        "filesystemLinkManager.config.enableSourceDeduplication": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable deduplication of operations to prevent redundant sources. Defaults to false for better performance. When disabled, may result in higher fileCountPromptThreshold values if duplicated sources exist."
+        },
+        "filesystemLinkManager.config.disableRegexValidation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable regex-based validation for file paths and patterns. WARNING: Disabling may allow unsafe or malformed patterns. Best practice: keep this enabled unless you are confident in your input sources."
+        },
+        "filesystemLinkManager.config.disableCommandValidation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable security and syntax validation for shell commands. WARNING: Disabling may allow execution of unsafe or destructive commands. Best practice: keep this enabled unless you are confident in your commands."
+        },
+        "filesystemLinkManager.logging.level": {
+          "type": "string",
+          "enum": ["error", "warn", "info", "debug"],
+          "default": "debug",
+          "description": "Logging level for the extension (error, warn, info, debug)"
+        },
+        "filesystemLinkManager.logging.enableFileLogging": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable logging to files in VS Code's global storage"
+        },
+        "filesystemLinkManager.logging.maxFileSize": {
+          "type": "number",
+          "default": 10485760,
+          "description": "Maximum log file size in bytes before rotation (default: 10MB)"
+        },
+        "filesystemLinkManager.logging.maxFiles": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum number of log files to keep during rotation"
+        }
+      }
+    }
+  },
+  "scripts": {
+  "vscode:prepublish": "npm run compile",
+  "compile": "tsc -p ./",
+  "compile:tests": "tsc -p ./tsconfig.tests.json",
+  "watch": "tsc -watch -p ./",
+  "pretest": "npm run compile && npm run lint",
+  "test": "jest",
+  "test:watch": "jest --watch",
+  "test:coverage": "jest --coverage",
+  "lint": "eslint src",
+  "lint:fix": "eslint src --fix",
+  "clean": "rimraf out out-tests",
+  "build": "npm run clean && npm run compile",
+  "build:all": "npm run clean && npm run compile && npm run compile:tests"
+  },
+  "dependencies": {
+    "execa": "^9.5.3",
+    "fast-glob": "^3.3.3",
+    "fs-extra": "^11.2.0",
+    "reflect-metadata": "^0.2.2",
+    "tsyringe": "^4.10.0",
+    "winston": "^3.17.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.14",
+    "@types/mock-fs": "^4.13.4",
+    "@types/node": "^20.19.11",
+    "@types/vscode": "^1.102.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "eslint-plugin-jsdoc": "^54.1.0",
+    "eslint-plugin-prettier": "^5.5.4",
+    "globals": "^16.3.0",
+    "jest": "^29.7.0",
+    "jiti": "^2.4.4",
+    "mock-fs": "^5.5.0",
+    "rimraf": "^5.0.5",
+    "ts-jest": "^29.4.1",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.39.1"
+  }
+}
