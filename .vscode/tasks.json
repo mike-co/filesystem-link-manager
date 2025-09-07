@@ -1,0 +1,87 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "watch",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "npm",
+			"script": "compile",
+			"group": "build",
+			"presentation": {
+				"reveal": "silent"
+			},
+			"problemMatcher": "$tsc"
+		},
+		{
+			"type": "npm",
+			"script": "compile:test",
+			"group": "build",
+			"presentation": {
+				"reveal": "silent"
+			},
+			"problemMatcher": "$tsc"
+		},
+		{
+			"type": "npm",
+			"script": "test",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "new"
+			},
+			"problemMatcher": []
+		},
+		{
+			"type": "npm",
+			"script": "test:full",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "new"
+			},
+			"problemMatcher": []
+		},
+		{
+			"type": "npm",
+			"script": "lint",
+			"group": "build",
+			"presentation": {
+				"reveal": "silent"
+			},
+			"problemMatcher": "$eslint-stylish"
+		},
+		{
+			"label": "test:coverage",
+			"type": "shell",
+			"command": "npm run test:coverage"
+		},
+		{
+			"label": "lint:fix",
+			"type": "shell",
+			"command": "npm run lint:fix"
+		},
+		{
+			"label": "refactor-test",
+			"type": "shell",
+			"command": "npm run lint:fix; npm run test:coverage"
+		},
+		{
+			"label": "lint-fix-and-test",
+			"type": "shell",
+			"command": "npm run lint:fix; npm run test:coverage",
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}
