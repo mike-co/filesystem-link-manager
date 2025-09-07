@@ -1,0 +1,21 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "out-test",
+        "declaration": false,
+        "sourceMap": true,
+        "types": ["jest", "node", "vscode"],
+        "module": "CommonJS",
+    },
+    "include": [
+        "src/**/*.test.ts",
+        "test/**/*.ts",
+        "test/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "out",
+        "out-test",
+        "dist"
+    ]
+}

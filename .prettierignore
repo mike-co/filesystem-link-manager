@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+*.vsix
+
+# Logs
+*.log
+
+# Coverage reports
+coverage/
+
+# IDE files
+.vscode/settings.json
+
+# Config files that shouldn't be formatted
+package-lock.json
+*.min.js
+*.min.css
