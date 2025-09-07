@@ -14,11 +14,7 @@ module.exports = {
         '!src/**/*.type.ts',
         '!src/**/*.const.ts',
         '!src/**/*.test.ts',
-        '!src/**/*.enum.ts',
-        '!src/common/*.ts',
-        '!src/logging/*.ts',
-        '!src/common/**/*.ts',
-        '!src/logging/**/*.ts'
+        '!src/**/*.enum.ts'
     ],
     testPathIgnorePatterns: [
         '<rootDir>/node_modules/'
