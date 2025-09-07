@@ -1,11 +1,69 @@
-.vscode/**
-.vscode-test/**
-src/**
-.gitignore
+# VS Code extension ignore file for `vsce package`
+# Keep only runtime artifacts (compiled output) and required metadata.
+
+# -----------------------------
+# Editor, tooling and caches
+# -----------------------------
+.vscode/
+.vscode-test/
+node_modules/.cache/
+
+# -----------------------------
+# VCS and repository metadata
+# -----------------------------
+.git/
+.github/
+.copilot-tracking/
+
+# -----------------------------
+# Tests, coverage and CI artifacts
+# -----------------------------
+coverage/
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+test/
+
+# -----------------------------
+# Source files (we ship compiled JS in out/)
+# -----------------------------
+src/
+**/*.ts
+**/*.tsx
+tsconfig.tests.json
+jest.config.js
+
+# -----------------------------
+# Build artifacts and maps
+# -----------------------------
+*.log
+*.tsbuildinfo
+**/*.map
+
+# -----------------------------
+# Samples and other repo-only artifacts
+# -----------------------------
+samples/
+
+# -----------------------------
+# Editor/OS files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Misc repo helper files not needed in VSIX
+# -----------------------------
 .yarnrc
 vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
-**/*.map
-**/*.ts
-**/.vscode-test.*
+.gitignore
+
+# -----------------------------
+# Keep these files in the package:
+# - out/ (compiled extension)
+# - package.json
+# - README.md / readme.md
+# - LICENSE, LICENSE.txt
+# - CHANGELOG.md / changelog.md
+# Do NOT add exclusion rules for those files above.
+# -----------------------------
