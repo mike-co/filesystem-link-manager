@@ -8,7 +8,6 @@ import { FileTransport } from './file.transport';
 /**
  * Provides centralized logging functionality using winston logger with
  * structured logging capabilities and contextual information support.
- * Designed as a thin orchestrator following LIFT principles.
  */
 @injectable()
 export class LoggerService {

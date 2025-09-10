@@ -3,7 +3,7 @@
     "displayName": "FileSystem Link Manager",
     "description": "Manage symlinks & hardlinks to create focused workspaces.",
     "icon": "assets/icons/filesystem-link-manager.png",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "publisher": "mike-co",
     "engines": {
         "vscode": "^1.102.0"
@@ -37,7 +37,7 @@
         "productivity"
     ],
     "activationEvents": [],
-    "main": "./out/src/extension.js",
+    "main": "./dist/extension.js",
     "contributes": {
         "commands": [
             {
@@ -240,8 +240,10 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
+        "vscode:prepublish": "npm run webpack",
         "compile": "tsc -p ./",
+        "webpack": "webpack --mode production --devtool hidden-source-map",
+        "webpack:dev": "webpack --mode development",
         "compile:tests": "tsc -p ./tsconfig.tests.json",
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
@@ -250,8 +252,10 @@
         "test:coverage": "jest --coverage",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
-        "clean": "rimraf out out-tests",
+        "clean": "rimraf out out-tests dist coverage",
         "build": "npm run clean && npm run compile",
+        "build:bundle": "npm run clean && npm run webpack",
+        "watch:webpack": "webpack --mode development --watch",
         "build:all": "npm run clean && npm run compile && npm run compile:tests",
         "package": "vsce package",
         "publish": "vsce publish"
@@ -271,10 +275,12 @@
         "@types/mock-fs": "^4.13.4",
         "@types/node": "^20.19.11",
         "@types/vscode": "^1.102.0",
+        "@types/webpack": "^5.28.5",
         "@typescript-eslint/eslint-plugin": "^8.31.1",
         "@typescript-eslint/parser": "^8.31.1",
         "@vscode/test-cli": "^0.0.11",
         "@vscode/test-electron": "^2.5.2",
+        "esbuild": "^0.25.9",
         "eslint": "^9.25.1",
         "eslint-plugin-jsdoc": "^54.1.0",
         "eslint-plugin-prettier": "^5.5.4",
@@ -284,7 +290,10 @@
         "mock-fs": "^5.5.0",
         "rimraf": "^5.0.5",
         "ts-jest": "^29.4.1",
+        "ts-loader": "^9.5.4",
         "typescript": "^5.8.3",
-        "typescript-eslint": "^8.39.1"
+        "typescript-eslint": "^8.39.1",
+        "webpack": "^5.101.3",
+        "webpack-cli": "^6.0.1"
     }
 }

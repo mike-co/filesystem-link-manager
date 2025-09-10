@@ -4,7 +4,6 @@ import { isAbsolute, resolve } from 'path';
 import { FileSystemItemType } from '../../config';
 
 /**
- * Internal DRY helper for file discovery using fast-glob.
  * Provides common fast-glob configuration with customizable options.
  * 
  * @param baseDirectoryPath Base directory path to search for files within
