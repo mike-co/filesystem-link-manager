@@ -1,12 +1,12 @@
 # VS Code extension ignore file for `vsce package`
-# Keep only runtime artifacts (compiled output) and required metadata.
+# Keep only runtime artifacts (bundled output) and required metadata.
 
 # -----------------------------
 # Editor, tooling and caches
 # -----------------------------
 .vscode/
 .vscode-test/
-node_modules/.cache/
+node_modules/
 
 # -----------------------------
 # VCS and repository metadata
@@ -25,20 +25,22 @@ coverage/
 test/
 
 # -----------------------------
-# Source files (we ship compiled JS in out/)
+# Source files (we ship bundled JS in dist/)
 # -----------------------------
 src/
+out/
 **/*.ts
 **/*.tsx
+tsconfig.json
 tsconfig.tests.json
 jest.config.js
+webpack.config.js
 
 # -----------------------------
 # Build artifacts and maps
 # -----------------------------
 *.log
 *.tsbuildinfo
-**/*.map
 
 # -----------------------------
 # Samples and other repo-only artifacts
@@ -63,7 +65,8 @@ eslint.config.mts
 
 # -----------------------------
 # Keep these files in the package:
-# - out/ (compiled extension)
+# - dist/ (bundled extension - includes all dependencies)
+# - assets/ (icons and other assets)
 # - package.json
 # - README.md / readme.md
 # - LICENSE, LICENSE.txt
