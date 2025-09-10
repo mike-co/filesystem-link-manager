@@ -45,7 +45,7 @@ export default defineConfig([
       }
     },
     rules: {
-   // Core TypeScript rules
+      // Core TypeScript rules
       "@typescript-eslint/no-unused-vars": ["warn", {
         "argsIgnorePattern": "^_",
         "varsIgnorePattern": "^_"

@@ -4,10 +4,22 @@ All notable changes to the "filesystem-link-manager" VS Code extension are docum
 
 This project adheres to Keep a Changelog (https://keepachangelog.com/) and follows Semantic Versioning.
 
-## [unreleased]
+## [0.2.0] - 2025-09-11
 
 ### Changed
 - Updated `.vscodeignore` to exclude not needed for extension information.
+- Updated package description for clarity.
+- Added license information to package.json.
+- Reordered categories and keywords for better organization.
+- Changed default logging level from 'debug' to 'info'.
+- Modified file discovery function to return resolved paths for consistency.
+- Updated PathSearchPattern interface to accept both string and array types for patterns.
+- Enhanced tests to include logger service in attribute adjustment processes.
+- Refactored processFileAttributeAdjustments function to include detailed logging at various stages.
+- Improved error handling and user confirmation logging in file attribute adjustments.
+
+### Added
+- Added filesystem-link-manager-example1.gif from assets.
 
 ## [0.1.0] - 2025-09-08
 

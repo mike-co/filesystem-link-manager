@@ -4,6 +4,10 @@
 
 A VS Code extension that helps developers create efficient workspaces by linking files and directories from large codebases, specifically designed to work within GitHub Copilot's indexing thresholds for optimal AI assistance.
 
+## Examples
+
+![Filesystem Link Manager](./assets/filesystem-link-manager-example1.gif "Filesystem Link Manager")
+
 ## 🚀 Why Filesystem Link Manager?
 
 ### The Large Monorepo Challenge
