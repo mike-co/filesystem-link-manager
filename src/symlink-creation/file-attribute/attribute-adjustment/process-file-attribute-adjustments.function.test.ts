@@ -18,6 +18,7 @@ import { discoverAllFiles } from '../../discovery';
 import { isFileReadonly } from './is-file-readonly.function';
 import { setFileReadonly } from './set-file-readonly.function';
 import { writeBackupRecordsToCsv } from './write-backup-records-to-csv.function';
+import { LoggerService } from '../../../logging';
 
 describe('process-file-attribute-adjustments.function', () => {
     const tmpRoot = path.join(process.cwd(), 'tmp', 'test-' + Date.now());
@@ -26,6 +27,7 @@ describe('process-file-attribute-adjustments.function', () => {
     let mockIsFileReadonly: jest.MockedFunction<typeof isFileReadonly>;
     let mockSetFileReadonly: jest.MockedFunction<typeof setFileReadonly>;
     let mockWriteBackupRecordsToCsv: jest.MockedFunction<typeof writeBackupRecordsToCsv>;
+    let mockLogger: jest.Mocked<LoggerService>;
 
     beforeAll(() => {
         const nodeModulesPath = path.join(process.cwd(), 'node_modules');
@@ -55,6 +57,16 @@ describe('process-file-attribute-adjustments.function', () => {
         mockWriteBackupRecordsToCsv = writeBackupRecordsToCsv as jest.MockedFunction<
             typeof writeBackupRecordsToCsv
         >;
+
+        // Create mock logger
+        mockLogger = {
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+            setLevel: jest.fn(),
+            getLevel: jest.fn().mockReturnValue('debug'),
+        } as unknown as jest.Mocked<LoggerService>;
 
         // Default mocks
         mockDiscoverAllFiles.mockResolvedValue([]);
@@ -89,7 +101,7 @@ describe('process-file-attribute-adjustments.function', () => {
             ];
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockIsFileReadonly).not.toHaveBeenCalled();
@@ -113,7 +125,7 @@ describe('process-file-attribute-adjustments.function', () => {
             ];
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockIsFileReadonly).not.toHaveBeenCalled();
@@ -140,7 +152,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(true); // Already readonly, and target is 'set' (true)
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockIsFileReadonly).toHaveBeenCalledWith(
@@ -169,7 +181,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             // Should check and modify the destinationPath, not the sourcePath
@@ -209,7 +221,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             // Should still check and modify the sourcePath for non-copy operations
@@ -243,7 +255,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockIsFileReadonly).toHaveBeenCalledWith(
@@ -275,7 +287,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(true);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockIsFileReadonly).toHaveBeenCalledWith(
@@ -317,7 +329,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false); // All files need to be set to readonly
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockDiscoverAllFiles).toHaveBeenCalledWith(sourceDirPath);
@@ -354,7 +366,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false); // File needs change
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockWriteBackupRecordsToCsv).toHaveBeenCalledWith(
@@ -397,7 +409,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false); // File needs change
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockWriteBackupRecordsToCsv).toHaveBeenCalledWith(
@@ -447,7 +459,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false); // Both files need change
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockWriteBackupRecordsToCsv).toHaveBeenCalledTimes(2);
@@ -494,7 +506,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false); // Both files need change
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockWriteBackupRecordsToCsv).toHaveBeenCalledTimes(1); // Only backup group gets CSV
@@ -527,7 +539,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockHandleOverwriteBehavior).not.toHaveBeenCalled(); // No confirmation needed
@@ -562,7 +574,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockHandleOverwriteBehavior).toHaveBeenCalledWith([backupPath]);
@@ -597,7 +609,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockHandleOverwriteBehavior).toHaveBeenCalledWith([backupPath]);
@@ -632,9 +644,11 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act & Assert
-            await expect(processFileAttributeAdjustments(entries)).rejects.toThrow(DomainError);
+            await expect(processFileAttributeAdjustments(entries, mockLogger)).rejects.toThrow(
+                DomainError
+            );
 
-            const error = await processFileAttributeAdjustments(entries).catch(e => e);
+            const error = await processFileAttributeAdjustments(entries, mockLogger).catch(e => e);
             expect(error.domainErrorInfo).toEqual(
                 FILE_ATTRIBUTE_DOMAIN_ERRORS.FILE_ATTRIBUTE_MODIFICATION_FAILED
             );
@@ -671,7 +685,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockResolvedValue(false);
 
             // Act
-            await processFileAttributeAdjustments(entries);
+            await processFileAttributeAdjustments(entries, mockLogger);
 
             // Assert
             expect(mockWriteBackupRecordsToCsv).toHaveBeenCalled(); // Should proceed with default
@@ -698,7 +712,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockIsFileReadonly.mockRejectedValue(new Error('Permission denied'));
 
             // Act & Assert
-            await expect(processFileAttributeAdjustments(entries)).rejects.toThrow(
+            await expect(processFileAttributeAdjustments(entries, mockLogger)).rejects.toThrow(
                 'Permission denied'
             );
         });
@@ -722,7 +736,7 @@ describe('process-file-attribute-adjustments.function', () => {
             mockSetFileReadonly.mockRejectedValue(new Error('Read-only filesystem'));
 
             // Act & Assert
-            await expect(processFileAttributeAdjustments(entries)).rejects.toThrow(
+            await expect(processFileAttributeAdjustments(entries, mockLogger)).rejects.toThrow(
                 'Read-only filesystem'
             );
         });
@@ -749,7 +763,9 @@ describe('process-file-attribute-adjustments.function', () => {
             mockWriteBackupRecordsToCsv.mockRejectedValue(new Error('Disk full'));
 
             // Act & Assert
-            await expect(processFileAttributeAdjustments(entries)).rejects.toThrow('Disk full');
+            await expect(processFileAttributeAdjustments(entries, mockLogger)).rejects.toThrow(
+                'Disk full'
+            );
         });
     });
 });

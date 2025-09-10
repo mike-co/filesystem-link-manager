@@ -36,5 +36,5 @@ export interface ExecuteWorkflowParams {
     /** Initial progress percentage to start from */
     initialProgressIncrement: number;
     /** Workspace root directory for resolving relative paths */
-    workspaceRoot: string;
+    workspaceRoot?: string;
 }

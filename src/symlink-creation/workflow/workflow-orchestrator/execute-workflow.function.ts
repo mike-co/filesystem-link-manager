@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve } from 'path';
 import { Progress, window } from 'vscode';
+import { DomainError } from '../../../common';
 import { LoggerService } from '../../../logging';
 import { FileAttributeAdjustment, FileSystemAction, FileSystemItemType, FileSystemOperationConfig } from '../../config';
 import { CopyManagerService, CopyOperationResult } from '../../copying';
@@ -46,7 +47,7 @@ export async function executeWorkflow(params: ExecuteWorkflowParams): Promise<bo
     const config: FileSystemOperationConfig = await configParserService.parseConfiguration(configData);
 
     // Convert relative paths to absolute
-    resolveTargetPath(config, workspaceRoot, logger);
+    resolveTargetPath(config, logger, workspaceRoot);
 
     progress.report({ increment: 10, message: 'Configuration validation successful' });
     logger.info('Configuration validation successful', {
@@ -309,8 +310,15 @@ function calculateTotalOperations(config: FileSystemOperationConfig): number {
 /**
  * Convert relative target directory path to absolute using workspace root.
  */
-function resolveTargetPath(config: FileSystemOperationConfig, workspaceRoot: string, logger: LoggerService): void {
+function resolveTargetPath(config: FileSystemOperationConfig, logger: LoggerService, workspaceRoot?: string): void {
     if (!isAbsolute(config.targetDirectoryPath)) {
+        if (!workspaceRoot) {
+            throw new DomainError({
+                key: 'WORKSPACE_ROOT_NOT_FOUND',
+                message: 'VS Code workspace root directory not found',
+                description: 'FS link manager requires an open workspace to resolve relative paths'
+            });
+        }
         const originalPath = config.targetDirectoryPath;
         config.targetDirectoryPath = resolve(workspaceRoot, config.targetDirectoryPath);
         logger.debug('Converted relative path to absolute using workspace root', {

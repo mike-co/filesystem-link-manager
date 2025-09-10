@@ -19,7 +19,7 @@ async function discoverInternal(
 ): Promise<string[]> {
     // Normalize path for cross-platform compatibility
     const normalizedBasePath = resolve(baseDirectoryPath);
-    return fg(pattern, {
+    const paths = await fg(pattern, {
         caseSensitiveMatch: false, // Match files case-insensitively (cross-platform consistency)
         baseNameMatch: true,       // Match patterns against filenames only, not full paths
         absolute: true,            // Return absolute file paths
@@ -37,6 +37,7 @@ async function discoverInternal(
         cwd: normalizedBasePath,
         ...extraOptions,
     });
+    return paths.map(path => resolve(path));
 }
 
 /**

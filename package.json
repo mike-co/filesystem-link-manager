@@ -1,8 +1,9 @@
 {
     "name": "filesystem-link-manager",
     "displayName": "FileSystem Link Manager",
-    "description": "Extension for managing file system links — symlinks, hard links, and junctions—across repositories and workspaces, with automated workspace setup and command execution.",
-    "version": "0.1.0",
+    "description": "Manage symlinks & hardlinks to create focused workspaces.",
+    "icon": "assets/icons/filesystem-link-manager.png",
+    "version": "0.2.0",
     "publisher": "mike-co",
     "engines": {
         "vscode": "^1.102.0"
@@ -11,8 +12,29 @@
         "type": "git",
         "url": "https://github.com/mike-co/filesystem-link-manager.git"
     },
+    "license": "SEE LICENSE IN LICENSE",
     "categories": [
+        "AI",
+        "SCM Providers",
         "Other"
+    ],
+    "keywords": [
+        "AI",
+        "filesystem",
+        "github-copilot",
+        "copilot",
+        "filesystem-link-manager",
+        "symlink",
+        "hardlink",
+        "junction",
+        "workspace",
+        "workspace-manager",
+        "monorepo",
+        "tfs",
+        "link-manager",
+        "file-links",
+        "devtools",
+        "productivity"
     ],
     "activationEvents": [],
     "main": "./out/src/extension.js",
@@ -196,7 +218,7 @@
                         "info",
                         "debug"
                     ],
-                    "default": "debug",
+                    "default": "info",
                     "description": "Logging level for the extension (error, warn, info, debug)"
                 },
                 "filesystemLinkManager.logging.enableFileLogging": {

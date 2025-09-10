@@ -10,16 +10,16 @@ A VS Code extension that helps developers create efficient workspaces by linking
 
 When working with large monorepos (>750-2500 files), particularly those in TFS or other non-Git source control systems, you face several challenges:
 
-- **GitHub Copilot Indexing Limits**: 
+- [**GitHub Copilot Indexing Limits**](https://code.visualstudio.com/docs/copilot/reference/workspace-context#_managing-the-workspace-index) (at the moment of writing): 
   - **< 750 files**: Advanced automatic local index
   - **750-2500 files**: Advanced local index (manual build required)
   - **> 2500 files**: Basic index with limited AI assistance
 
-- **TFS + Visual Studio 2022 Conflicts**: Visual Studio 2022 defaults to Git source control when a `.git` folder exists, even in TFS-mapped directories, causing workflow disruption and source control conflicts.
-
 - **Monorepo Complexity**: Large monorepos often contain multiple services, packages, and shared libraries, making it difficult to focus on specific areas without loading the entire codebase.
 
 - **Performance Issues**: Full monorepo loading can be extremely slow and resource-intensive, especially with thousands of files across multiple services.
+
+- **TFS + Visual Studio 2022 Conflicts**: Visual Studio 2022 (at the time of writing) defaults to Git source control when a `.git` folder exists, even in TFS-mapped directories, making it difficult to create a local Git repository under TFS.
 
 ### The Solution
 
@@ -27,8 +27,9 @@ Filesystem Link Manager creates optimized workspaces by selectively linking file
 
 ✅ **Stay within GitHub Copilot's optimal indexing range** (< 750 files for best AI assistance)
 ✅ **Utilize AI features while still working in the context of the monorepo** through symlinks/hardlinks connecting to the sources
-✅ **Work with specific services/packages** from large TFS monorepos without loading everything  
-✅ **Initialize Git repositories** for modern tooling without TFS conflicts  
+✅ **Utilize existing build infrastructure of monorepo** you can still run command line utilities for build and linting in the monorepo while developing in the linked workspace. This is useful for local agentic development workflows.
+✅ **Work with specific services/packages** from large monorepos without loading everything  
+✅ **Initialize Git repositories** for modern tooling without source control conflicts  
 ✅ **Focus on code subsets** or specific domains within the monorepo  
 ✅ **Automate workspace setup** with post-execution commands
 
@@ -48,168 +49,364 @@ Filesystem Link Manager creates optimized workspaces by selectively linking file
 
 ## 🎯 Quick Start Tutorial
 
-Let's create your first optimized workspace from a large TFS monorepo containing multiple services and shared packages.
+Let's create optimized workspaces for AI agentic development from a large C# enterprise monorepo. We'll show how to create service-focused workspaces that stay under GitHub Copilot's 750-file threshold while providing all necessary context for AI-assisted development of specific services.
 
-### Before: Large TFS Monorepo Structure
+### Before: Large Enterprise C# Monorepo Structure
 ```
-C:\TFS\EnterpriseMonorepo\         (8000+ files)
-├── src\
-│   ├── core\
-│   │   ├── engine\               (200 files)
-│   │   ├── utils\                (150 files)
-│   │   ├── models\               (40 files)
-│   │   ├── modernization\        (20 files)
-│   │   └── ...                   (3000+ other files)
-│   ├── services\
-│   │   ├── user-service\         (40 files)
-│   │   ├── auth-service\         (250 files)
-│   │   ├── payment-service\      (400 files)
-│   │   ├── notification-service\ (200 files)
-│   │   └── ...                   (1500+ other services)
-│   ├── shared\
-│   │   ├── types\                (50 files)
-│   │   ├── constants\            (50 files)
-│   │   ├── utilities\            (100 files)
-│   │   └── components\           (300 files)
-│   └── legacy\
-│       ├── reporting-legacy\     (800 files)
-│       └── admin-legacy\         (600 files)
-├── packages\
-│   ├── ui-components\            (100 files)
-│   ├── business-logic\           (350 files)
-│   └── data-access\              (300 files)
-├── docs\                         (200+ files)
-├── tests\                        (50+ files)
-├── tools\                        (200+ files)
-└── config\                       (150+ files)
-```
-
-### After: Optimized Workspace Structure
-```
-C:\Workspaces\UserServiceWorkspace\  (< 750 files total)
-├── .git\                            (newly initialized)
-├── .gitignore                       (copied)
-├── src\
-│   ├── core\
-│   │   ├── models\                  (symlinked directory)
-│   │   └── modernization\           (symlinked directory)
-│   ├── services\
-│   │   └── user-service\            (symlinked directory)(remove readonly flag if it exists from linked sources)
-│   └── shared\
-│       ├── types\                   (symlinked directory)
-│       └── utilities\               (symlinked directory)
-├── hardlinked\
-│   └── ui-components\               (hardlinked *.cs files)(remove readonly flag if it exists from linked sources) 
-├── md-docs\            (hardlinked .md files)
-│   └── *.md
+C:\Monorepo\EnterpriseMonorepo\         (> 7000+ files)
+├── Src\
+│   ├── Core\
+│   │   ├── Engine\               (250 files)
+│   │   ├── Utilities\            (50 files)
+│   │   ├── Models\               (120 files)
+│   │   ├── Validation\           (80 files)
+│   │   ├── Security\             (150 files)
+│   │   └── ...                   (2500+ other files)
+│   ├── Services\
+│   │   ├── AuthenticationService\    (100 files)
+│   │   ├── PaymentService\           (50 files)
+│   │   ├── UserService\              (180 files)
+│   │   ├── NotificationService\      (150 files)
+│   │   ├── ApiGateway\               (200 files)
+│   │   └── ...                       (1800+ other services)
+│   ├── Shared\
+│   │   ├── Contracts\            (80 files)
+│   │   ├── Constants\            (40 files)
+│   │   ├── Extensions\           (60 files)
+│   │   ├── Infrastructure\       (200 files)
+│   │   └── Middleware\           (100 files)
+├── Tests\
+│   ├── UnitTests\
+│   │   ├── AuthenticationService.Tests\  (120 files)
+│   │   ├── PaymentService.Tests\         (60 files)
+│   │   ├── UserService.Tests\            (80 files)
+│   │   └── ...                           (800+ other test files)
+│   └── IntegrationTests\         (200+ files)
+├── Packages\
+│   ├── BusinessLogic\            (90 files)
+│   ├── DataAccess\               (250 files)
+│   ├── Logging\                  (60 files)
+│   └── TestingUtilities\         (90 files)
+├── Templates\                    (30 files)
+│   ├── .gitignore
+│   └── .github\
+│       ├── copilot-instructions-authentication.md
+│       ├── copilot-instructions-payment-service.md
+│       └── workflows\
+├── Docs\                         (150+ files)
+├── Scripts\                      (80+ files)
+└── Config\                       (120+ files)
 ```
 
-### Step 1: Create Configuration File
+### After: Optimized Workspace Structure - Workspace 1 (Authentication Service Focus)
+```
+C:\Workspaces\AuthenticationServiceWorkspace\  (< 750 files total)
+├── .git\                                 (newly initialized)
+├── .gitignore                            (copied from templates)
+├── .github\                              (copied from templates)
+│   ├── copilot-instructions.md
+│   └── workflows\
+├── .filesystem-link-manager
+│   └── auth-attribute-adjustments.csv     (if you have any readonly file attributes which have been modified)
+├── Src\
+│   ├── Services\
+│   │   └── AuthenticationService\        (symlinked directory - 100 files)
+│   ├── Core\
+│   │   ├── Security\                     (symlinked directory - 150 files)
+│   ├── Shared\
+│   │   └── Middleware\                   (symlinked directory - 100 files)
+├── Tests\
+│   └── UnitTests\
+│       └── AuthenticationService.Tests\  (symlinked directory - 120 files)
+├── ReferenceCode\                        (hardlinked .cs files)
+│   ├── Core\
+│   │   ├── Utilities\                    (hardlinked *.cs from Src/Core/Utilities)
+│   │   └── Models\                       (hardlinked *.cs from Src/Core/Models)
+│   └── Shared\
+│       ├── Contracts\                    (hardlinked *.cs from Src/Shared/Contracts)
+│       └── Extensions\                   (hardlinked *.cs from Src/Shared/Extensions)
+├── Documentation\                        (hardlinked .md files)
+│   └── *.md                              (authentication-related docs)
+```
 
-Create `linkmanager-config.json`:
+### After: Optimized Workspace Structure - Workspace 2 (Payment Service Focus)
+```
+C:\Workspaces\PaymentServiceWorkspace\  (< 750 files total)
+├── .git\                                 (newly initialized)
+├── .gitignore                            (copied from templates)
+├── .github\                              (copied from templates)
+│   ├── copilot-instructions.md
+│   └── workflows\
+├── .filesystem-link-manager
+│   └── payment-attribute-adjustments.csv     (if you have any readonly file attributes which have been modified)
+├── Src\
+│   ├── Services\
+│   │   └── PaymentService\               (symlinked directory - 50 files)
+│   ├── Shared\
+│   │   ├── Infrastructure\               (symlinked directory - 200 files)
+│   │   └── Middleware\                   (symlinked directory - 100 files)
+├── Tests\
+│   └── UnitTests\
+│       └── PaymentService.Tests\         (symlinked directory - 60 files)
+├── ReferenceCode\                        (hardlinked .cs files)
+│   ├── Core\
+│   │   ├── Utilities\                    (hardlinked *.cs from Src/Core/Utilities)
+│   │   └── Models\                       (hardlinked *.cs from Src/Core/Models)
+│   ├── Shared\
+│   │   └── Contracts\                    (hardlinked *.cs from Src/Shared/Contracts)
+│   └── Packages\
+│       └── BusinessLogic\                (hardlinked *.cs from Packages/BusinessLogic)
+├── Documentation\                        (hardlinked .md files)
+│   └── *.md                              (payment-related docs)
+```
+
+### Step 1: Create Configuration Files
+
+Create a folder for your workspace configurations and add both files:
+
+**Configuration 1: `linkmanager-config-authentication-service.json`** (Authentication Service Focus - ~720 files)
 
 ```json
 {
-  "targetDirectoryPath": ".",
-  "silentMode": false,
-  "defaultOverwriteBehavior": "overwrite",
-  "fileCountPromptThreshold": 749,
-  "operations": [
-    {
-      "action": "symlink",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/src",
-      "searchPatterns": [
+    "targetDirectoryPath": "C:/Workspaces/AuthenticationServiceWorkspace",
+    "silentMode": false,
+    "enableSourceDeduplication": true,
+    "defaultOverwriteBehavior": "overwrite",
+    "fileCountPromptThreshold": 749,
+    "operations": [
         {
-          "patternType": "glob",
-          "pattern": "core/mod*"
+            "action": "symlink",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": [
+                        "Src/Services/AuthenticationService",
+                        "Src/Core/Security",
+                        "Src/Shared/Middleware"
+                    ]
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Tests/UnitTests/Authentication*"
+                }
+            ],
+            "fileAttributeAdjustment": {
+                "readonly": "remove",
+                "backupFilePath": ".filesystem-link-manager/auth-attribute-adjustments.csv"
+            }
         },
         {
-          "patternType": "path",
-          "pattern": ["shared/types", "shared/utilities"]
-        }
-      ],
-      "destinationPath": "src"
-    },
-    {
-      "action": "symlink",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/src",
-      "searchPatterns": [
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Core/{Utilities,Models}/*.cs"
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Shared/{Contracts,Extensions}/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
         {
-          "patternType": "glob",
-          "pattern": "services/user-service"
-        }
-      ],
-      "destinationPath": "src",
-      "fileAttributeAdjustment": {
-				"readonly": "remove",
-				"backupFilePath": ".backups/user-service-file-attribute-adjustments.csv"
-			}
-    },
-    {
-      "action": "hardlink",
-      "itemType": "file",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/packages",
-      "searchPatterns": [
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Docs",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "*auth*.md"
+                }
+            ],
+            "destinationPath": "Documentation"
+        },
         {
-          "patternType": "glob",
-          "pattern": "ui-components/*.cs"
-        }
-      ],
-      "destinationPath": "hardlinked",
-      "fileAttributeAdjustment": {
-				"readonly": "remove",
-				"backupFilePath": ".backups/ui-components-file-attribute-adjustments.csv"
-			}
-    },
-    {
-      "action": "hardlink",
-      "itemType": "file",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/docs",
-      "searchPatterns": [
+            "action": "copy",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".gitignore"
+                },
+                {
+                    "patternType": "path",
+                    "pattern": ".github/copilot-instructions-authentication.md"
+                }
+            ]
+        },
         {
-          "patternType": "glob",
-          "pattern": "*.md"
+            "action": "copy",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".github/workflows"
+                }
+            ]
         }
-      ],
-      "destinationPath": "md-docs"
-    },
-    {
-      "action": "copy",
-      "itemType": "file",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo",
-      "searchPatterns": [
+    ],
+    "postExecutionCommands": [
         {
-          "patternType": "path",
-          "pattern": ".gitignore"
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\"",
+            "skipIfPathExists": ".git"
+        },
+        {
+            "command": "git mv \".github/copilot-instructions-authentication.md\" \".github/copilot-instructions.md\" && git commit -m \"Rename copilot-instructions-authentication.md to copilot-instructions.md\"",
+            "skipIfPathExists": ".github/copilot-instructions.md"
+        },
+        {
+            "command": "code C:/Workspaces/AuthenticationServiceWorkspace"
         }
-      ]
-    }
-  ],
-  "postExecutionCommands": [
-    {
-      "command": "git init && git add . && git commit -m \"User service workspace from TFS monorepo\"",
-      "skipIfPathExists": ".git"
-    }
-  ]
+    ]
 }
 ```
 
-### Step 2: Execute the Configuration
+**Configuration 2: `linkmanager-config-payment-service.json`** (Payment Service Focus - ~730 files)
 
+```json
+{
+    "targetDirectoryPath": "C:/Workspaces/PaymentServiceWorkspace",
+    "silentMode": false,
+    "enableSourceDeduplication": true,
+    "defaultOverwriteBehavior": "overwrite",
+    "fileCountPromptThreshold": 749,
+    "operations": [
+        {
+            "action": "symlink",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": [
+                        "Src/Services/PaymentService",
+                        "Src/Shared/Infrastructure",
+                        "Src/Shared/Middleware"
+                    ]
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Tests/UnitTests/PaymentService*"
+                }
+            ],
+            "fileAttributeAdjustment": {
+                "readonly": "remove",
+                "backupFilePath": ".filesystem-link-manager/payment-utilities-file-adjustments.csv"
+            }
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Core/{Utilities,Models}/*.cs"
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Shared/Contracts/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Packages/BusinessLogic/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Docs",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "*payment*.md"
+                }
+            ],
+            "destinationPath": "Documentation"
+        },
+        {
+            "action": "copy",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".gitignore"
+                },
+                {
+                    "patternType": "path",
+                    "pattern": ".github/copilot-instructions-payment-service.md"
+                }
+            ]
+        },
+        {
+            "action": "copy",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".github/workflows"
+                }
+            ]
+        }
+    ],
+    "postExecutionCommands": [
+        {
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\"",
+            "skipIfPathExists": ".git"
+        },
+        {
+            "command": "git mv \".github/copilot-instructions-payment-service.md\" \".github/copilot-instructions.md\" && git commit -m \"Rename copilot-instructions-payment-service.md to copilot-instructions.md\"",
+            "skipIfPathExists": ".github/copilot-instructions.md"
+        },
+        {
+            "command": "code C:/Workspaces/PaymentServiceWorkspace"
+        }
+    ]
+}
+```
+
+### Step 2: Execute the Configurations
+
+**For Authentication Service Workspace:**
 1. Open VS Code
 2. Press `Ctrl+Shift+P` to open Command Palette
 3. Type: `FileSystem Link Manager: Execute from Config File`
-4. Select your `linkmanager-config.json` file
+4. Select your `linkmanager-config-authentication-service.json` file
 5. Confirm the operation when prompted
+
+**For Payment Service Workspace:**
+1. Repeat the same process
+2. Select your `linkmanager-config-payment-service.json` file
+3. This creates a separate, focused workspace for payment service development
 
 ### Step 3: Verify Results
 
 - **File Count**: You will be prompted with a warning if more than fileCountPromptThreshold (749 by default) files are going to be created
-- **GitHub Copilot**: Verify advanced indexing is active (check status bar)
+- **GitHub Copilot**: Verify advanced indexing is active (check status bar) - essential for AI agentic development
+- **Service Context**: Confirm your target service directory is symlinked (changes will reflect in monorepo)
+- **Reference Code**: Verify hardlinked .cs files are available for AI context (Core utilities, models, shared contracts)
+- **Tests**: Confirm test directories are symlinked for comprehensive AI-assisted testing
 - **Git Repository**: Confirm `.git` folder was created and initial commit made
-- **File Links**: Test that changes in linked files reflect in both locations
+- **AI Development Ready**: Test that GitHub Copilot can provide intelligent suggestions using both service code and reference context
 
 ## ⚙️ Configuration Guide
 
@@ -225,9 +422,9 @@ The configuration file defines how your workspace will be created. Here's a comp
   "silentMode": false,                          // Skip user prompts
   "defaultOverwriteBehavior": "overwrite",      // "overwrite" | "skip" | "error"
   "fileCountPromptThreshold": 749,              // Max files before confirmation
-  "enableSourceDeduplication": false,          // Remove duplicate operations
+  "enableSourceDeduplication": false,           // Remove duplicate operations
   "disableRegexValidation": false,              // Disable pattern validation
-  "disableCommandValidation": false            // Disable command validation
+  "disableCommandValidation": false             // Disable command validation
 }
 ```
 
@@ -241,17 +438,17 @@ Each operation defines how to handle specific files or directories:
     {
       "action": "symlink | hardlink | copy",     // Link type
       "itemType": "file | directory",            // Target type
-      "baseDirectoryPath": "string",             // Source base path
+      "baseDirectoryPath": "string",             // Absolute source base path
       "searchPatterns": [                        // File selection patterns
         {
           "patternType": "glob | regex | ignore-rules-file-path | path",
           "pattern": "string | string[]"        // Pattern or file path (arrays only for 'path' type)
         }
       ],
-      "destinationPath": "string",               // Optional: relative destination
+      "destinationPath": "string",               // Optional: relative to targetDirectoryPath destination
       "fileAttributeAdjustment": {               // Optional: attribute changes
         "readonly": "set | remove | preserve",   // In some monorepo solutions, you may have a readonly flag on multiple files unless they are checked out explicitly by the relevant source control (e.g., TFS). This can create a poor developer experience for linked sources, as they will be pointing to readonly files. You can use this flag to modify file attributes.
-        "backupFilePath": "string"               // Backup file for rollback
+        "backupFilePath": "string"               // Backup file path for rollback
       }
     }
   ]
@@ -268,12 +465,12 @@ Automate setup tasks after linking operations:
     {
       "command": "string",                       // Shell command
       "skipIfPathExists": "string",              // Skip condition
-      "cwd": "string",                          // Working directory
-      "timeoutInMs": 300000,                    // Timeout (5 min default)
-      "env": {                                  // Environment variables
+      "cwd": "string",                           // Working directory
+      "timeoutInMs": 300000,                     // Timeout (5 min default)
+      "env": {                                   // Environment variables
         "KEY": "value"
       },
-      "shell": true                             // Use shell execution
+      "shell": true                              // Use shell execution
     }
   ]
 }
@@ -284,23 +481,24 @@ Automate setup tasks after linking operations:
 #### Path Patterns
 For exact file and directory matching (most efficient):
 
-**File System Example:**
+**Enterprise C# Monorepo Example:**
 ```
-C:\TFS\EnterpriseMonorepo\src\core\
-├── models\           ← matches pattern ["models", "modernization"]
-├── modernization\    ← matches pattern ["models", "modernization"]
-├── engine\           ← not matched
-└── utils\            ← not matched
+C:\Monorepo\EnterpriseMonorepo\Src\Core\
+├── Models\           ← matches pattern ["Models", "Validation"]
+├── Validation\       ← matches pattern ["Models", "Validation"]
+├── Engine\           ← not matched
+├── Utilities\        ← not matched
+└── Security\         ← not matched
 ```
 
 ```json
 {
   "patternType": "path",
-  "pattern": ["models", "modernization"]   // Array of exact directory names when itemType = directory
+  "pattern": ["Models", "Validation"]      // Array of exact directory names when itemType = directory
 }
 {
   "patternType": "path",
-  "pattern": ["src/main.ts", "docs/readme.md"]  // Specific files when itemType = file
+  "pattern": ["Src/Services/AuthenticationService/Program.cs", "Templates/.gitignore"]  // Specific files when itemType = file
 }
 ```
 
@@ -309,15 +507,19 @@ Most common and user-friendly:
 ```json
 {
   "patternType": "glob",
-  "pattern": "*.ts"                    // All TypeScript files
+  "pattern": "*.cs"                           // All C# files
 }
 {
   "patternType": "glob", 
-  "pattern": "{src,test}/**/*.js"      // JS files in src or test directories
+  "pattern": "{Src,Tests}/**/*.cs"            // C# files in Src or Tests directories
 }
 {
   "patternType": "glob",
-  "pattern": "components/**/index.ts"  // All index.ts in components subdirs
+  "pattern": "Src/Services/*Service"          // All service directories
+}
+{
+  "patternType": "glob",
+  "pattern": "Tests/UnitTests/Authentication*" // Authentication-related test directories
 }
 ```
 
@@ -326,7 +528,11 @@ For complex matching:
 ```json
 {
   "patternType": "regex",
-  "pattern": "^.*/.(test|spec)/.ts$"  // Test files
+  "pattern": "^.*/(Test|Spec).*\\.cs$"        // C# test files
+}
+{
+  "patternType": "regex",
+  "pattern": "^.*/Services/.*Service/.*\\.cs$" // Service implementation files
 }
 ```
 
@@ -335,7 +541,7 @@ Use existing `.gitignore` or custom ignore files:
 ```json
 {
   "patternType": "ignore-rules-file-path",
-  "pattern": ".gitignore"               // Use .gitignore patterns
+  "pattern": "C:/Monorepo/EnterpriseMonorepo/Templates/.gitignore"  // Path to .gitignore file. Rules are resolved relative to baseDirectoryPath
 }
 ```
 
@@ -350,22 +556,22 @@ Use existing `.gitignore` or custom ignore files:
 {
   "action": "symlink",
   "itemType": "directory",
-  "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/packages",
-  "searchPatterns": [{"patternType": "glob", "pattern": "ui-components"}]
+  "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src/Services",
+  "searchPatterns": [{"patternType": "glob", "pattern": "AuthenticationService"}]
 }
 ```
 
 #### Hardlinks (Files) ✅ **Recommended for Copilot** 
-- **Best for**: Subset of individual files you might edit. Modifications are linked to the original files. Note that adding more files to the monorepo will not be reflected here until you rerun the command. The same applies when adding more files to folders that have hardlinks to monorepo files. Those would need to be extracted, but you would be able to use local Git source control to track them if needed. 
+- **Best for**: Individual files you might edit. Modifications are linked to the original files. Note: Adding new files to the monorepo requires rerunning the command to include them. New files added to folders with hardlinks won't be automatically reflected, but you can track them using local Git source control if needed. 
 - **Copilot Indexing**: ✅ **Works perfectly**
-- **Use case**: Configuration files, package.json, README files
+- **Use case**: Configuration files, package.json, README files, documentation files, or a subset of relevant files from a larger folder
 
 ```json
 {
   "action": "hardlink", 
   "itemType": "file",
-  "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo",
-  "searchPatterns": [{"patternType": "glob", "pattern": "package.json"}]
+  "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src/Core",
+  "searchPatterns": [{"patternType": "glob", "pattern": "Models/*.cs"}]
 }
 ```
 
@@ -378,8 +584,8 @@ Use existing `.gitignore` or custom ignore files:
 {
   "action": "copy",
   "itemType": "directory", 
-  "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/docs",
-  "searchPatterns": [{"patternType": "glob", "pattern": "api"}]
+  "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+  "searchPatterns": [{"patternType": "glob", "pattern": ".github"}]
 }
 ```
 
@@ -387,7 +593,7 @@ Use existing `.gitignore` or custom ignore files:
 - **Best for**: Scripts and executables
 - **Copilot Indexing**: ⚠️ **At the time of writing, VS Code has trouble indexing these**
 - **Extra permissions**: ⚠️ **You may need additional file system permissions to create symlinks to individual files**
-- **Use case**: Build scripts, tools
+- **Use case**: Build scripts and tools. If using VS Code Copilot, it's best to avoid this option.
 
 ### Git Repository Quick Setup
 
@@ -471,149 +677,25 @@ Control extension logging for debugging:
 - **Info**: General information (default)
 - **Debug**: Detailed diagnostic information
 
-## 📚 Real-World Examples
-
-### Example 1: TFS Monorepo Authentication Service Focus
-
-**Problem**: 8000-file enterprise monorepo in TFS, needed focused workspace for authentication service development.
-
-**Source Structure** (from our TFS monorepo):
-```
-C:\TFS\EnterpriseMonorepo\src\services\auth-service\     (250 files)
-C:\TFS\EnterpriseMonorepo\src\shared\types\             (50 files)
-C:\TFS\EnterpriseMonorepo\src\shared\utilities\         (100 files)
-C:\TFS\EnterpriseMonorepo\packages\ui-components\       (100 files)
-```
-
-```json
-{
-  "targetDirectoryPath": "C:/Workspaces/AuthServiceWorkspace",
-  "fileCountPromptThreshold": 749,
-  "operations": [
-    {
-      "action": "symlink",
-      "itemType": "directory", 
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/src/services",
-      "searchPatterns": [
-        {"patternType": "glob", "pattern": "auth-service"}
-      ],
-      "destinationPath": "src/services"
-    },
-    {
-      "action": "symlink",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/src/shared",
-      "searchPatterns": [
-        {"patternType": "path", "pattern": ["types", "utilities"]}
-      ],
-      "destinationPath": "src/shared"
-    },
-    {
-      "action": "symlink",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/packages",
-      "searchPatterns": [
-        {"patternType": "glob", "pattern": "ui-components"}
-      ],
-      "destinationPath": "packages"
-    },
-    {
-      "action": "copy",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/docs",
-      "searchPatterns": [
-        {"patternType": "glob", "pattern": "auth*"}
-      ],
-      "destinationPath": "docs"
-    }
-  ],
-  "postExecutionCommands": [
-    {
-      "command": "git init && git add . && git commit -m \"Auth service workspace from TFS monorepo\"",
-      "skipIfPathExists": ".git"
-    }
-  ]
-}
-```
-
-**Result**: 520 files → Advanced Copilot indexing ✅
-
-### Example 2: TFS Monorepo Multi-Service Development
-
-**Problem**: 8000-file TFS monorepo, needed workspace for user and payment services with shared dependencies.
-
-**Source Structure** (from our TFS monorepo):
-```
-C:\TFS\EnterpriseMonorepo\src\services\user-service\     (150 files)
-C:\TFS\EnterpriseMonorepo\src\services\payment-service\ (200 files)
-C:\TFS\EnterpriseMonorepo\packages\business-logic\      (180 files)
-C:\TFS\EnterpriseMonorepo\packages\data-access\         (150 files)
-```
-
-```json
-{
-  "targetDirectoryPath": "C:/Workspaces/UserPaymentServices", 
-  "operations": [
-    {
-      "action": "symlink",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/src/services",
-      "searchPatterns": [
-        {"patternType": "path", "pattern": ["user-service", "payment-service"]}
-      ],
-      "destinationPath": "src/services"
-    },
-    {
-      "action": "symlink", 
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/packages",
-      "searchPatterns": [
-        {"patternType": "path", "pattern": ["business-logic", "data-access"]}
-      ],
-      "destinationPath": "packages"
-    },
-    {
-      "action": "copy",
-      "itemType": "directory",
-      "baseDirectoryPath": "C:/TFS/EnterpriseMonorepo/tools",
-      "searchPatterns": [
-        {"patternType": "glob", "pattern": "*"}
-      ],
-      "destinationPath": "tools"
-    }
-  ],
-  "postExecutionCommands": [
-    {
-      "command": "npm install",
-      "cwd": "src/services/user-service"
-    },
-    {
-      "command": "git init && git add . && git commit -m \"Multi-service workspace from TFS monorepo\"",
-      "skipIfPathExists": ".git"
-    }
-  ]
-}
-```
-
 ## 💡 Best Practices
 
 ### GitHub Copilot Optimization
 
 #### Stay Under File Limits
 - **Target**: Keep workspace under 750 files for automatic advanced indexing
-- **Monitor**: Use `fileCountPromptThreshold: 749` to get warnings
+- **Monitor**: Use `fileCountPromptThreshold` to get warnings
 - **Strategy**: Link only directories you actively work on
 
 #### Prioritize Important Code
 1. **Symlink to directories**: Core application logic (actively developed) or where you want to use most AI development features.
 2. **Hardlink to files**: If directories have many files and you want to limit scope, see if you can use hardlinks.
 3. **Copy**: Reference materials and documentation
-4. **Symlink to files**: If you do not develop using GitHub Copilot AI, this functionality may find its uses for your scenarios. Otherwise, ignore it.
+4. **Symlink to files**: This may be useful if you don't use GitHub Copilot AI for development. Otherwise, avoid this option.
 
-#### Use Meaningful Structure
+#### Use Clear Organization
 ```json
 {
-  "destinationPath": "src/core/authentication"  // Clear organization
+  "destinationPath": "src/core/authentication"  // Meaningful folder structure
 }
 ```
 
@@ -622,7 +704,7 @@ C:\TFS\EnterpriseMonorepo\packages\data-access\         (150 files)
 #### Disable Deduplication for Large Sets
 ```json
 {
-  "enableSourceDeduplication": false // If for some reason the plugin underperforms, you could try disabling this. Otherwise, it may be worth keeping it enabled.
+  "enableSourceDeduplication": false // If the plugin underperforms, try disabling this. Otherwise, keep it enabled.
 }
 ```
 
@@ -631,35 +713,14 @@ C:\TFS\EnterpriseMonorepo\packages\data-access\         (150 files)
 #### Keep Validations Enabled
 ```json
 {
-  "disableRegexValidation": false,     // Prevent unsafe patterns. Disable if you want to bypass it.
-  "disableCommandValidation": false   // Prevent dangerous commands. Disable if you want to bypass it.
+  "disableRegexValidation": false,     // Prevents unsafe patterns. Disable to bypass validation.
+  "disableCommandValidation": false   // Prevents dangerous commands. Disable to bypass validation.
 }
 ```
 
 #### Review Post-Execution Commands
 - Always specify `skipIfPathExists` for destructive operations
 - Use timeouts for long-running commands
-
-### Team Collaboration
-
-#### Version Control Configurations
-```bash
-# Add to version control
-git add linkmanager-config.json
-
-# Share with team
-git commit -m "Add Filesystem Link Manager configuration"
-```
-
-#### Environment-Specific Paths
-Use relative paths when possible:
-```json
-{
-  "targetDirectoryPath": "./optimized",      // The main path where your linked solution will be located. Can be an absolute or relative path. If relative, it will be relative to the VS Code running root directory.
-  "baseDirectoryPath": "./source-code",     // Absolute path where the source is located.
-  
-}
-```
 
 ## 🔧 Troubleshooting
 
@@ -676,39 +737,31 @@ Use relative paths when possible:
 #### Issue: "File Count Exceeds Threshold"
 **Symptoms**: Warning about too many files
 **Solutions**:
-1. Increase `fileCountPromptThreshold` temporarily
-2. Use more specific patterns to reduce file count
+1. Temporarily increase `fileCountPromptThreshold` or use silentMode
+2. Use more specific patterns to reduce the file count
 3. Enable `enableSourceDeduplication` to remove duplicates
-4. Split into multiple smaller workspaces
-
-#### Issue: "GitHub Copilot Not Using Advanced Index"
-**Symptoms**: Basic indexing despite <750 files
-**Check**:
-1. Verify file count: Check VS Code file explorer
-2. Force rebuild: Command Palette → `Build Local Workspace Index`
-3. Check Copilot status: Status bar → Copilot icon
-4. Verify file types: Ensure files are indexable (not binary)
+4. Split the workspace into multiple smaller workspaces
 
 #### Issue: "Symlinks Not Working in Git"
 **Symptoms**: Git does not show symlinks as modified files
 **Solutions**:
-1. Did you use symlinks to files?
-2. You could try configuring Git: `git config core.symlinks true`.
-3. Consider using hardlinks or symlinks to directories, as you should encounter fewer issues.
+1. Check if you used symlinks instead of hardlinks for files
+2. Try configuring Git: `git config core.symlinks true`
+3. Consider using hardlinks or directory symlinks, as these typically have fewer issues
 
 #### Issue: "Post-Execution Commands Fail"
 **Symptoms**: Commands timeout or fail
 **Debug**:
-1. Test commands manually in terminal
-2. Check working directory with `cwd` parameter
+1. Test commands manually in the terminal
+2. Check the working directory with the `cwd` parameter
 3. Increase `timeoutInMs` for slow operations
-4. Turn on debug logs and see if it is a syntax or other type of error.
+4. Enable debug logs to identify syntax or other errors
 
 ### Platform-Specific Considerations
 
 #### Windows
 - **Symlinks for directories**: May require elevated permissions depending on what you can already access
-- **Path Separators**: Use `\\` or `/` in JSON strings
+- **Path Separators**: Use `/` or `\\` in JSON strings
 - **Command Shell**: Commands run in `cmd.exe` by default
 - **Symlinks for files**: Require elevated permissions or Developer Mode
 
@@ -716,7 +769,7 @@ Use relative paths when possible:
 - **Symlinks**: Work without special permissions
 - **Path Separators**: Use `/` in paths
 - **Command Shell**: Commands run in `/bin/sh` by default
-- **Testing note**: I have not fully tested Linux/macOS systems with respect to the plugin, as my main use case is for Windows. However, if issues are encountered, please log the bug.
+- **Testing note**: Linux/macOS systems have not been fully tested with this plugin, as my main use case was for Windows. If you encounter issues, please report them as bugs.
 
 ### Debugging Tips
 
@@ -730,15 +783,7 @@ Common JSON issues:
 - Missing commas between array elements
 - Incorrect path separators for platform
 - Unescaped backslashes in Windows paths
-
-#### Test Patterns
-Use simple patterns first:
-```json
-{
-  "patternType": "glob",
-  "pattern": "*"  // Start simple, then add complexity
-}
-```
+- See details in the error log
 
 ## 📄 License
 
@@ -748,5 +793,3 @@ This extension is licensed under the MIT License. See the LICENSE file for detai
 
 - **Issues**: Report bugs and feature requests on our GitHub repository
 - **Documentation**: This README and in-extension help
-
----

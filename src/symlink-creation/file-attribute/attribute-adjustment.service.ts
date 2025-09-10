@@ -40,7 +40,7 @@ export class AttributeAdjustmentService {
             processedCount: entries.length,
         });
 
-        await processFileAttributeAdjustments(entries);
+        await processFileAttributeAdjustments(entries, this.logger);
 
         this.logger.info(`File attribute adjustments completed successfully for ${entries.length} entries`, {
             operation: 'processFileAttributeAdjustments',
