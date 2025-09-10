@@ -87,13 +87,6 @@ export async function executeUnifiedWorkflow(
 
                 // Get workspace root directory for path resolution
                 const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
-                if (!workspaceRoot) {
-                    throw new DomainError({
-                        key: 'WORKSPACE_ROOT_NOT_FOUND',
-                        message: 'VS Code workspace root directory not found',
-                        description: 'FS link manager requires an open workspace to resolve relative paths'
-                    });
-                }
 
                 // Step 2: Execute workflow with configuration parsing and validation
                 const workflowResult = await executeWorkflow({

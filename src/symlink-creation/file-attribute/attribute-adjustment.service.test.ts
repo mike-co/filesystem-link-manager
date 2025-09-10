@@ -78,7 +78,10 @@ describe('attribute-adjustment.service', () => {
 
             // Assert
             expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledTimes(1);
-            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(entries);
+            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(
+                entries,
+                mockLoggerService
+            );
         });
 
         test('should call processFileAttributeAdjustments with empty array when no entries provided', async () => {
@@ -90,7 +93,7 @@ describe('attribute-adjustment.service', () => {
 
             // Assert
             expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledTimes(1);
-            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith([]);
+            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith([], mockLoggerService);
         });
 
         test('should process single entry successfully', async () => {
@@ -112,7 +115,10 @@ describe('attribute-adjustment.service', () => {
             await serviceUnderTest.processFileAttributeAdjustments(entries);
 
             // Assert
-            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(entries);
+            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(
+                entries,
+                mockLoggerService
+            );
         });
     });
 
@@ -354,7 +360,10 @@ describe('attribute-adjustment.service', () => {
             await serviceUnderTest.processFileAttributeAdjustments(entries);
 
             // Assert
-            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(entries);
+            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(
+                entries,
+                mockLoggerService
+            );
             expect(mockLoggerService.debug).toHaveBeenCalledWith(
                 'Processing file attribute adjustments for 3 entries',
                 expect.any(Object)
@@ -387,7 +396,10 @@ describe('attribute-adjustment.service', () => {
             await serviceUnderTest.processFileAttributeAdjustments(entries);
 
             // Assert
-            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(entries);
+            expect(mockProcessFileAttributeAdjustments).toHaveBeenCalledWith(
+                entries,
+                mockLoggerService
+            );
             // Callback handling is tested in the pure function tests, service just passes through
         });
     });

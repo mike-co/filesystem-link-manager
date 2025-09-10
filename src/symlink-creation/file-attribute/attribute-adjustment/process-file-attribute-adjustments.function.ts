@@ -1,6 +1,7 @@
 import { pathExists } from 'fs-extra';
 import { isAbsolute, resolve } from 'path';
 import { DomainError } from '../../../common';
+import { LoggerService, LogContext } from '../../../logging';
 import { discoverAllFiles } from '../../discovery';
 import { FileAttributeAdjustmentEntry } from '../types/file-attribute-adjustment-entry.interface';
 import { FileAttributeBackupRecord } from '../types/file-attribute-backup-record.interface';
@@ -26,12 +27,21 @@ import { FILE_ATTRIBUTE_DOMAIN_ERRORS } from '../file-attribute-domain-errors.co
  * - Backup groups (with backup path): creates CSV backup files and applies changes
  * 
  * @param entries - Array of file attribute adjustment entries to process
+ * @param logger - Logger service for debug logging throughout the workflow
  * @returns Promise that resolves when all attribute adjustments are completed successfully
  * @throws DomainError with FILE_ATTRIBUTE_MODIFICATION_FAILED when attribute adjustment operations fail or user rejects changes
  */
 export async function processFileAttributeAdjustments(
-    entries: FileAttributeAdjustmentEntry[]
+    entries: FileAttributeAdjustmentEntry[],
+    logger: LoggerService
 ): Promise<void> {
+    const logContext: LogContext = {
+        operation: 'processFileAttributeAdjustments',
+        processedCount: entries.length
+    };
+
+    logger.debug('Starting file attribute adjustments processing', logContext);
+    
     // Filter entries that have file attribute adjustments
     const fileAttributeAdjustmentEntries = entries.filter(entry => 
         entry.fileAttributeAdjustment && 
@@ -39,6 +49,7 @@ export async function processFileAttributeAdjustments(
     );
     
     if (fileAttributeAdjustmentEntries.length === 0) {
+        logger.debug('No attribute adjustments needed, returning early', logContext);
         return; // No adjustments needed
     }
     const entriesToProcess: FileAttributeAdjustmentEntry[] = [];
@@ -72,12 +83,18 @@ export async function processFileAttributeAdjustments(
         }
     }
     
+    logger.debug('Grouped entries by backup path', {
+        ...logContext,
+        totalGroups: groupedEntries.size,
+        entriesToProcess: entriesToProcess.length
+    });
+    
     // Collect all changes for all groups
     const groupChanges = new Map<string | null, FileAttributeBackupRecord[]>();
     const backupPathsToCreate: string[] = [];
     
     for (const [backupPath, groupEntries] of groupedEntries) {
-        const backupRecords = await collectChangesForGroup(groupEntries);
+        const backupRecords = await collectChangesForGroup(groupEntries, logger);
         
         if (backupRecords.length > 0) {
             groupChanges.set(backupPath, backupRecords);
@@ -89,8 +106,16 @@ export async function processFileAttributeAdjustments(
         }
     }
     
+    const totalChanges = Array.from(groupChanges.values()).reduce((sum, records) => sum + records.length, 0);
+    logger.debug('Collected all changes', {
+        ...logContext,
+        totalChanges,
+        backupPathsToCreate: backupPathsToCreate.length
+    });
+    
     // If no changes needed, return early
     if (groupChanges.size === 0) {
+        logger.debug('No changes needed, returning early', logContext);
         return;
     }
     
@@ -101,20 +126,25 @@ export async function processFileAttributeAdjustments(
         
         for (const backupPath of backupPathsToCreate) {
             if (await pathExists(backupPath)) {
-                // File exists, add to confirmation list
                 existingBackupPaths.push(backupPath);
             }
-            // If file doesn't exist, no confirmation needed - will be created without user prompt
         }
         
         // Only prompt user if there are existing backup files that would be overwritten
         if (existingBackupPaths.length > 0) {
+            logger.debug('Requesting user confirmation for backup overwrites', {
+                ...logContext,
+                existingBackupPaths
+            });
+            
             const userDecision = await getUserConfirmationForBackups(entriesToProcess, existingBackupPaths);
             
             if (userDecision === 'skip') {
+                logger.debug('User declined changes, skipping all modifications', logContext);
                 return; // User declined, skip all changes
             }
             if (userDecision === 'error') {
+                logger.debug('User rejected changes, throwing error', logContext);
                 const domainError = new DomainError(FILE_ATTRIBUTE_DOMAIN_ERRORS.FILE_ATTRIBUTE_MODIFICATION_FAILED);
                 domainError.message = 'User rejected file attribute changes';
                 throw domainError;
@@ -124,8 +154,14 @@ export async function processFileAttributeAdjustments(
     
     // Apply changes for each group
     for (const [backupPath, backupRecords] of groupChanges) {
-        await applyChangesForGroup(backupPath, backupRecords);
+        await applyChangesForGroup(backupPath, backupRecords, logger);
     }
+    
+    logger.debug('Successfully completed all file attribute adjustments', {
+        ...logContext,
+        totalChanges,
+        totalGroups: groupChanges.size
+    });
 }
 
 /**
@@ -134,14 +170,18 @@ export async function processFileAttributeAdjustments(
  * and creates backup records for files that need modifications.
  * 
  * @param entries - Array of file attribute adjustment entries in the same backup group
+ * @param logger - Logger service for debug logging
  * @returns Promise resolving to array of backup records for files that need changes
  */
-async function collectChangesForGroup(entries: FileAttributeAdjustmentEntry[]): Promise<FileAttributeBackupRecord[]> {
+async function collectChangesForGroup(
+    entries: FileAttributeAdjustmentEntry[], 
+    logger: LoggerService
+): Promise<FileAttributeBackupRecord[]> {
     const backupRecords: FileAttributeBackupRecord[] = [];
     
     // Collect all file paths that need processing
     for (const entry of entries) {
-        const filePaths = await getFilePathsForEntry(entry);
+        const filePaths = await getFilePathsForEntry(entry, logger);
         
         for (const filePath of filePaths) {
             const record = await createBackupRecordIfChanged(entry, filePath);
@@ -192,14 +232,21 @@ async function getUserConfirmationForBackups(
  * 
  * @param backupPath - Path where backup CSV file should be created, or null for no backup
  * @param backupRecords - Array of backup records containing the changes to apply
+ * @param logger - Logger service for debug logging
  * @returns Promise that resolves when all changes are applied successfully
  */
 async function applyChangesForGroup(
     backupPath: string | null, 
-    backupRecords: FileAttributeBackupRecord[]
+    backupRecords: FileAttributeBackupRecord[],
+    logger: LoggerService
 ): Promise<void> {
     // Create backup file only if backupPath is specified (not null/default group)
     if (backupPath !== null) {
+        logger.debug('Creating backup CSV file', {
+            operation: 'applyChangesForGroup',
+            backupPath,
+            recordCount: backupRecords.length
+        });
         await writeBackupRecordsToCsv(backupPath, backupRecords);
     }
     
@@ -215,13 +262,23 @@ async function applyChangesForGroup(
  * For directory entries, discovers all files recursively within the directory.
  * 
  * @param entry - File attribute adjustment entry to process
+ * @param logger - Logger service for debug logging
  * @returns Promise resolving to array of absolute file paths that need attribute processing
  */
-async function getFilePathsForEntry(entry: FileAttributeAdjustmentEntry): Promise<string[]> {
+async function getFilePathsForEntry(
+    entry: FileAttributeAdjustmentEntry, 
+    logger: LoggerService
+): Promise<string[]> {
     if (entry.itemType === 'file') {
         return [entry.sourcePath];
     } else {
-        return await discoverAllFiles(entry.sourcePath)
+        const discoveredFiles = await discoverAllFiles(entry.sourcePath);
+        logger.debug('Discovered files in directory', {
+            operation: 'getFilePathsForEntry',
+            filePath: entry.sourcePath,
+            discoveredCount: discoveredFiles.length
+        });
+        return discoveredFiles;
     }
 }
 

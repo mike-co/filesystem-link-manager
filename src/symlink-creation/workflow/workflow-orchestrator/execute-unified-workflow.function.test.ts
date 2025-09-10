@@ -190,35 +190,6 @@ describe('execute-unified-workflow.function', () => {
                 attributeAdjustmentService: params.attributeAdjustmentService,
             });
         });
-
-        test('should handle missing workspace root', async () => {
-            // Arrange
-            const params = {
-                configSource: 'settings' as const,
-                logger: { info: jest.fn(), debug: jest.fn(), error: jest.fn() } as any,
-                configParserService: {} as any,
-                copyManagerService: {} as any,
-                linkManagerService: {} as any,
-                commandExecutorService: {} as any,
-                fileDiscoveryService: {} as any,
-                attributeAdjustmentService: {} as any,
-            };
-
-            // Mock workspace with no folders
-            (vscode.workspace as any).workspaceFolders = undefined;
-
-            const mockConfigData = { targetDirectoryPath: '/target', operations: [] };
-            const mockConfiguration = {
-                get: jest.fn().mockReturnValue(mockConfigData),
-            };
-            mockWorkspace.getConfiguration.mockReturnValue(mockConfiguration as any);
-
-            // Act & Assert
-            await expect(executeUnifiedWorkflow(params)).rejects.toThrow(DomainError);
-            await expect(executeUnifiedWorkflow(params)).rejects.toThrow(
-                'VS Code workspace root directory not found'
-            );
-        });
     });
 
     describe('Error handling', () => {

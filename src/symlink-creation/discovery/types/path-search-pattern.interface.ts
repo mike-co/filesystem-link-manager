@@ -22,5 +22,5 @@ export interface PathSearchPattern extends SearchPatternBase {
      * Examples: ['src/main.ts', 'docs/readme.md'], ['lib/', 'tests/']
      * Paths can be relative (to base directory) or absolute.
      */
-    pattern: string[];
+    pattern: string | string[];
 }
