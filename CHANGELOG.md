@@ -4,7 +4,7 @@ All notable changes to the "filesystem-link-manager" VS Code extension are docum
 
 This project adheres to Keep a Changelog (https://keepachangelog.com/) and follows Semantic Versioning.
 
-## [unrealeased] - 2025-10-29
+## [1.0.0] - 2025-10-29
 
 ### Added
 - Comprehensive README with step-by-step configuration examples, sample workspace, and troubleshooting guidance.

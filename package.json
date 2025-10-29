@@ -3,7 +3,7 @@
     "displayName": "FileSystem Link Manager",
     "description": "Manage symlinks & hardlinks to create focused workspaces.",
     "icon": "assets/icons/filesystem-link-manager.png",
-    "version": "0.3.0",
+    "version": "1.0.0",
     "publisher": "mike-co",
     "engines": {
         "vscode": "^1.102.0"
