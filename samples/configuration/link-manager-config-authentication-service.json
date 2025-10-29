@@ -1,0 +1,98 @@
+{
+    "targetDirectoryPath": "C:/Workspaces/AuthenticationServiceWorkspace",
+    "silentMode": false,
+    "enableSourceDeduplication": true,
+    "defaultOverwriteBehavior": "overwrite",
+    "fileCountPromptThreshold": 749,
+    "operations": [
+        {
+            "action": "symlink",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": [
+                        "Src/Services/AuthenticationService",
+                        "Src/Core/Security",
+                        "Src/Shared/Middleware"
+                    ]
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Tests/UnitTests/Authentication*"
+                }
+            ],
+            "fileAttributeAdjustment": {
+                "readonly": "remove",
+                "backupFilePath": ".filesystem-link-manager/auth-attribute-adjustments.csv"
+            }
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Core/{Utilities,Models}/*.cs"
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Shared/{Contracts,Extensions}/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Docs",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "*auth*.md"
+                }
+            ],
+            "destinationPath": "Documentation"
+        },
+        {
+            "action": "copy",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".gitignore"
+                },
+                {
+                    "patternType": "path",
+                    "pattern": [{
+                        "sourcePath":".github/copilot-instructions-authentication.md", 
+                        "destinationPath": ".github/copilot-instructions.md"
+                    }]
+                }
+            ]
+        },
+        {
+            "action": "copy",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".github/workflows"
+                }
+            ]
+        }
+    ],
+    "postExecutionCommands": [
+        {
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\" && git switch -c \"feature/authentication-workspace\"",
+            "skipIfPathExists": ".git"
+        },
+        {
+            "command": "code C:/Workspaces/AuthenticationServiceWorkspace"
+        }
+    ]
+}

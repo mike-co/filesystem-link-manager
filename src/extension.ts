@@ -6,6 +6,7 @@
  */
 
 import 'reflect-metadata';
+import { readFile } from 'fs-extra';
 import type { DependencyContainer } from 'tsyringe';
 import { ExtensionContext, OutputChannel, commands, window, workspace } from 'vscode';
 import { setupContainer } from './container';
@@ -13,6 +14,8 @@ import { LoggerService } from './logging';
 import { LogLevel } from './logging';
 import { WorkflowOrchestratorService } from './symlink-creation/workflow';
 import { DomainError } from './common';
+import { LINK_AUDIT_DOMAIN_ERRORS, LinkAuditService, parseLinkAuditConfiguration } from './link-audit';
+import type { LinkAuditExecutionResult } from './link-audit';
 
 // Global DI container instance for the extension
 let diContainer: DependencyContainer | undefined;
@@ -84,6 +87,164 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
         // Resolve WorkflowOrchestratorService from DI container for command execution
         const workflowService = diContainer.resolve(WorkflowOrchestratorService);
+        const linkAuditService = diContainer.resolve(LinkAuditService);
+
+        const auditLinksCommand = commands.registerCommand(
+            'filesystemLinkManager.auditLinks',
+            async () => {
+                const operation = 'auditLinksCommand';
+
+                try {
+                    logger.info('Executing link audit command', {
+                        operation,
+                    });
+
+                    const selectedWorkspaceFolder = await (async () => {
+                        const folders = workspace.workspaceFolders;
+
+                        if (!folders || folders.length === 0) {
+                            window.showErrorMessage('Link audit requires an open workspace folder.');
+                            logger.warn('Link audit command aborted because no workspace folder is available', {
+                                operation,
+                            });
+                            return undefined;
+                        }
+
+                        if (folders.length === 1) {
+                            return folders[0];
+                        }
+
+                        const pickedFolder = await window.showWorkspaceFolderPick({
+                            placeHolder: 'Select the workspace folder to audit',
+                        });
+
+                        if (!pickedFolder) {
+                            logger.info('Link audit command cancelled during workspace folder selection', {
+                                operation,
+                            });
+                            return undefined;
+                        }
+
+                        return pickedFolder;
+                    })();
+
+                    if (!selectedWorkspaceFolder) {
+                        return;
+                    }
+
+                    const configurationSelection = await window.showOpenDialog({
+                        canSelectMany: false,
+                        openLabel: 'Select Link Audit Configuration',
+                        filters: {
+                            'JSON files': ['json'],
+                            'All files': ['*'],
+                        },
+                        title: 'Select Link Audit Configuration File',
+                    });
+
+                    if (!configurationSelection || configurationSelection.length === 0) {
+                        logger.info('Link audit command cancelled during configuration selection', {
+                            operation,
+                        });
+                        return;
+                    }
+
+                    const configurationUri = configurationSelection[0];
+                    if (!configurationUri) {
+                        logger.warn('Link audit command cancelled because no configuration file was selected', {
+                            operation,
+                        });
+                        return;
+                    }
+
+                    const configurationPath = configurationUri.fsPath;
+                    const workspaceRoot = selectedWorkspaceFolder.uri.fsPath;
+
+                    logger.info('Reading link audit configuration', {
+                        operation,
+                        configurationPath,
+                        workspaceRoot,
+                    });
+
+                    let rawConfiguration: unknown;
+                    try {
+                        const configurationContents = await readFile(configurationPath, 'utf8');
+                        rawConfiguration = JSON.parse(configurationContents);
+                    } catch (readError) {
+                        throw new DomainError(LINK_AUDIT_DOMAIN_ERRORS.CONFIG_PARSE, {
+                            cause: readError,
+                        });
+                    }
+
+                    const collections = parseLinkAuditConfiguration(rawConfiguration);
+
+                    const executionResults: LinkAuditExecutionResult[] = await linkAuditService.execute({
+                        workspaceRoot,
+                        collections,
+                    });
+
+                    const totalItems = executionResults.reduce<number>((sum, result) => sum + result.report.itemCount, 0);
+
+                    logger.info('Link audit command completed successfully', {
+                        operation,
+                        collectionCount: executionResults.length,
+                        totalItems,
+                    });
+
+                    const successMessage = `Link audit completed for ${executionResults.length} collection${executionResults.length === 1 ? '' : 's'} (${totalItems} item${totalItems === 1 ? '' : 's'}).`;
+                    window.showInformationMessage(successMessage, 'Show Details').then(selection => {
+                        if (selection === 'Show Details') {
+                            outputChannel.appendLine(successMessage);
+                            if (executionResults.length > 0) {
+                                outputChannel.appendLine('Generated reports:');
+                                executionResults.forEach(result => {
+                                    outputChannel.appendLine(`• ${result.outputPath}`);
+                                });
+                            }
+                            outputChannel.show();
+                        }
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+                    if (error instanceof DomainError) {
+                        logger.error('Link audit command failed', {
+                            operation,
+                            errorMessage,
+                            errorStack: error.stack,
+                            errorName: error.name,
+                            domainErrorKey: error.domainErrorInfo.key,
+                            domainErrorDescription: error.domainErrorInfo.description,
+                            cause: error.cause,
+                        });
+                    } else if (error instanceof Error) {
+                        logger.error('Link audit command failed', {
+                            operation,
+                            errorMessage,
+                            errorStack: error.stack,
+                            errorName: error.name,
+                        });
+                    } else {
+                        logger.error('Link audit command failed', {
+                            operation,
+                            errorMessage,
+                            errorName: 'UnknownError',
+                        });
+                    }
+
+                    window.showErrorMessage(
+                        `Link audit command failed: ${errorMessage}`,
+                        'Show Details'
+                    ).then(selection => {
+                        if (selection === 'Show Details') {
+                            outputChannel.appendLine(`Link audit command failed: ${errorMessage}`);
+                            outputChannel.appendLine(`Stack trace: ${error instanceof Error ? error.stack : 'N/A'}`);
+                            outputChannel.show();
+                        }
+                    });
+                }
+            }
+        );
 
         // Register filesystemLinkManager.executeFromSettings command
         const executeFromSettingsCommand = commands.registerCommand(
@@ -293,6 +454,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
         // Add command disposables to context.subscriptions for proper cleanup
         context.subscriptions.push(
+            auditLinksCommand,
             executeFromSettingsCommand,
             executeFromConfigFileCommand,
             setLogLevelCommand
@@ -300,7 +462,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
         logger.info('Extension commands registered successfully', {
             operation: 'extensionActivation',
-            processedCount: 3,
+            processedCount: 4,
         });
       
     } catch (error) {

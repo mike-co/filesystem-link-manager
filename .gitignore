@@ -1,6 +1,7 @@
 .github
 .copilot-tracking
 out
+out-test
 dist
 node_modules
 .vscode-test/

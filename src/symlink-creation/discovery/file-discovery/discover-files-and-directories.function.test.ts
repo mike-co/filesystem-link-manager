@@ -15,6 +15,7 @@ import {
 describe('discover-files-and-directories.function', () => {
     // Use a repo-local temp path so mock-fs can map it reliably across platforms
     const tmpRoot = path.join(process.cwd(), 'tmp', 'lm-test-' + Date.now());
+    const externalTargetRoot = path.join(process.cwd(), 'tmp', 'lm-test-external-' + Date.now());
 
     beforeAll(() => {
         // Require mock-fs lazily to avoid interfering with Jest initialization
@@ -38,6 +39,15 @@ describe('discover-files-and-directories.function', () => {
                     },
                 },
                 'empty-file.txt': '',
+                'linked-external': mockFs.symlink({
+                    path: externalTargetRoot,
+                }),
+            },
+            [externalTargetRoot]: {
+                'external-only.ts': 'external content',
+                'external-dir': {
+                    'deep-file.ts': 'deep content',
+                },
             },
             // Ensure node_modules is available to Jest and other runtime modules
             [nodeModulesPath]: mockFs.load(nodeModulesPath),
@@ -79,6 +89,24 @@ describe('discover-files-and-directories.function', () => {
 
             // Assert
             expect(results).toEqual([]);
+        });
+
+        test('should not follow symbolic links by default', async () => {
+            // Act
+            const results = await discoverFilesWithGlob(tmpRoot, '**/external-only.ts');
+
+            // Assert
+            expect(results).toEqual([]);
+        });
+
+        test('should follow symbolic links when option enabled', async () => {
+            // Act
+            const results = await discoverFilesWithGlob(tmpRoot, '**/external-only.ts', {
+                followSymbolicLinks: true,
+            });
+
+            // Assert
+            expect(results).toEqual([path.join(tmpRoot, 'linked-external', 'external-only.ts')]);
         });
     });
 
@@ -131,6 +159,24 @@ describe('discover-files-and-directories.function', () => {
             // Assert - be more flexible since fast-glob might not match nested 'source' as expected
             expect(results.length).toBeGreaterThanOrEqual(1);
             expect(results.some(p => p.includes('source'))).toBe(true);
+        });
+
+        test('should not include symlinked directories by default', async () => {
+            // Arrange & Act
+            const results = await discoverDirectoriesWithGlob(tmpRoot, '**/external-dir');
+
+            // Assert
+            expect(results).toEqual([]);
+        });
+
+        test('should include symlinked directories when option enabled', async () => {
+            // Arrange & Act
+            const results = await discoverDirectoriesWithGlob(tmpRoot, '**/external-dir', {
+                followSymbolicLinks: true,
+            });
+
+            // Assert
+            expect(results).toEqual([path.join(tmpRoot, 'linked-external', 'external-dir')]);
         });
     });
 

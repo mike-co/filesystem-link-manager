@@ -1,5 +1,5 @@
 import { pathExists } from 'fs-extra';
-import * as path from 'path';
+import { isAbsolute } from 'node:path';
 import { injectable } from 'tsyringe';
 import { LoggerService } from '../../logging';
 import type { DirectoryToCopy, FileSystemOperationConfig, FileToCopy } from '../config';
@@ -93,7 +93,7 @@ export class CopyManagerService {
         for (const itemConfig of itemsToCopy) {
             const targetItemPath = itemConfig.destinationPath;
             // Validate that destination path is absolute - throw domain error if not
-            if (!path.isAbsolute(targetItemPath)) {
+            if (!isAbsolute(targetItemPath)) {
                 const message = `Destination path must be absolute: ${targetItemPath}`;
                 // Log reason for easier debugging
                 this.loggerService.debug('Invalid destination path detected', {

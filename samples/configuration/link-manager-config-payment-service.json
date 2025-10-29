@@ -1,0 +1,110 @@
+{
+    "targetDirectoryPath": "C:/Workspaces/PaymentServiceWorkspace",
+    "silentMode": false,
+    "enableSourceDeduplication": true,
+    "defaultOverwriteBehavior": "overwrite",
+    "fileCountPromptThreshold": 749,
+    "operations": [
+        {
+            "action": "symlink",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": [
+                        "Src/Services/PaymentService",
+                        "Src/Shared/Infrastructure",
+                        "Src/Shared/Middleware"
+                    ]
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Tests/UnitTests/PaymentService*"
+                }
+            ],
+            "fileAttributeAdjustment": {
+                "readonly": "remove",
+                "backupFilePath": ".filesystem-link-manager/payment-utilities-file-adjustments.csv"
+            }
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Src",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Core/{Utilities,Models}/*.cs"
+                },
+                {
+                    "patternType": "glob",
+                    "pattern": "Shared/Contracts/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "Packages/BusinessLogic/*.cs"
+                }
+            ],
+            "destinationPath": "ReferenceCode"
+        },
+        {
+            "action": "hardlink",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Docs",
+            "searchPatterns": [
+                {
+                    "patternType": "glob",
+                    "pattern": "*payment*.md"
+                }
+            ],
+            "destinationPath": "Documentation"
+        },
+        {
+            "action": "copy",
+            "itemType": "file",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".gitignore"
+                },
+                {
+                    "patternType": "path",
+                    "pattern": [{
+                        "sourcePath":".github/copilot-instructions-payment-service.md", 
+                        "destinationPath": ".github/copilot-instructions.md"
+                    }]
+                }
+            ]
+        },
+        {
+            "action": "copy",
+            "itemType": "directory",
+            "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+            "searchPatterns": [
+                {
+                    "patternType": "path",
+                    "pattern": ".github/workflows"
+                }
+            ]
+        }
+    ],
+    "postExecutionCommands": [
+        {
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\" && git switch -c \"feature/config-payment-workspace\"",
+            "skipIfPathExists": ".git"
+        },
+        {
+            "command": "code C:/Workspaces/PaymentServiceWorkspace"
+        }
+    ]
+}

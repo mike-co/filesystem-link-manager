@@ -1,3 +1,4 @@
+import { ZodError } from 'zod';
 import { validateConfig, validateHardlinkCompatibility } from './validate-config.function';
 import { DomainError } from '../../../common';
 import { CONFIG_DOMAIN_ERRORS } from '../config-domain-errors.const';
@@ -712,6 +713,437 @@ describe('validate-config.function', () => {
             await expect(validateConfig(invalidConfig)).rejects.toThrow(
                 'Pattern array elements cannot be empty'
             );
+        });
+
+        describe('Path mapping support', () => {
+            test('should validate copy file operation with single path mapping entry', async () => {
+                // Arrange
+                const config: FileSystemOperationConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(config)).resolves.toBeUndefined();
+            });
+
+            test('should validate hardlink file operation with array of path mapping entries', async () => {
+                // Arrange
+                const config: FileSystemOperationConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'hardlink',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: [
+                                        {
+                                            sourcePath: 'src/assets/logo.png',
+                                            destinationPath: 'dist/assets/logo.png',
+                                        },
+                                        {
+                                            sourcePath: 'src/assets/icon.png',
+                                            destinationPath: 'dist/assets/icon.png',
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(config)).resolves.toBeUndefined();
+            });
+
+            test('should validate copy file operation with mixed path mapping and direct path entries', async () => {
+                // Arrange
+                const config: FileSystemOperationConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: [
+                                        {
+                                            sourcePath: 'src/assets/logo.png',
+                                            destinationPath: 'dist/assets/logo.png',
+                                        },
+                                        'src/assets/readme.txt',
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(config)).resolves.toBeUndefined();
+            });
+
+            test('should reject path mapping entry with empty sourcePath', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: {
+                                        sourcePath: '',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping sourcePath must be a non-empty string'
+                );
+            });
+
+            test('should reject path mapping entry with whitespace destinationPath', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: '   ',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping destinationPath cannot be whitespace'
+                );
+            });
+
+            test('should reject path mapping array containing invalid entry', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: [
+                                        {
+                                            sourcePath: 'src/valid.ts',
+                                            destinationPath: 'dist/valid.ts',
+                                        },
+                                        {
+                                            sourcePath: 'src/invalid.ts',
+                                            destinationPath: '',
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping destinationPath must be a non-empty string'
+                );
+            });
+
+            test('should reject path mapping object for glob pattern type', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'glob',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                expect.assertions(2);
+                try {
+                    await validateConfig(invalidConfig);
+                    throw new Error('Expected validation to fail for glob pattern path mapping.');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(ZodError);
+
+                    if (error instanceof ZodError) {
+                        expect(error.issues[0]?.message).toBe(
+                            'Pattern type "glob" does not support path mapping objects. Use patternType "path" for source-to-destination mappings.'
+                        );
+                    }
+                }
+            });
+
+            test('should reject path mapping object for regex pattern type', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'regex',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                expect.assertions(2);
+                try {
+                    await validateConfig(invalidConfig);
+                    throw new Error('Expected validation to fail for regex pattern path mapping.');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(ZodError);
+
+                    if (error instanceof ZodError) {
+                        expect(error.issues[0]?.message).toBe(
+                            'Pattern type "regex" does not support path mapping objects. Use patternType "path" for source-to-destination mappings.'
+                        );
+                    }
+                }
+            });
+
+            test('should reject path mapping object for ignore-rules-file-path pattern type', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'ignore-rules-file-path',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                expect.assertions(2);
+                try {
+                    await validateConfig(invalidConfig);
+                    throw new Error(
+                        'Expected validation to fail for ignore rules file path pattern path mapping.'
+                    );
+                } catch (error) {
+                    expect(error).toBeInstanceOf(ZodError);
+
+                    if (error instanceof ZodError) {
+                        expect(error.issues[0]?.message).toBe(
+                            'Pattern type "ignore-rules-file-path" does not support path mapping objects. Use patternType "path" for source-to-destination mappings.'
+                        );
+                    }
+                }
+            });
+
+            test('should reject path mapping for symlink file operation', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'symlink',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping entries are only supported for copy and hardlink file operations.'
+                );
+            });
+
+            test('should reject path mapping for copy directory operation', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'directory',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: {
+                                        sourcePath: 'src/components/Button.tsx',
+                                        destinationPath: 'lib/components/Button.tsx',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping entries are only supported for copy and hardlink file operations.'
+                );
+            });
+
+            test('should reject mixed path mapping array for unsupported operation types', async () => {
+                // Arrange
+                const invalidConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'symlink',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: [
+                                        {
+                                            sourcePath: 'src/assets/logo.png',
+                                            destinationPath: 'dist/assets/logo.png',
+                                        },
+                                        'src/assets/readme.txt',
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(invalidConfig)).rejects.toThrow(
+                    'Path mapping entries are only supported for copy and hardlink file operations.'
+                );
+            });
+
+            test('should maintain backward compatibility for path string arrays on copy operations', async () => {
+                // Arrange
+                const config: FileSystemOperationConfig = {
+                    targetDirectoryPath: '/target/path',
+                    defaultOverwriteBehavior: 'overwrite',
+                    operations: [
+                        {
+                            action: 'copy',
+                            itemType: 'file',
+                            baseDirectoryPath: '/source/path',
+                            searchPatterns: [
+                                {
+                                    patternType: 'path',
+                                    pattern: ['src/file-a.txt', 'src/file-b.txt'],
+                                },
+                            ],
+                        },
+                    ],
+                    fileCountPromptThreshold: 100,
+                };
+
+                // Act & Assert
+                await expect(validateConfig(config)).resolves.toBeUndefined();
+            });
         });
     });
 

@@ -1,10 +1,16 @@
 import 'reflect-metadata';
 import * as vscode from 'vscode';
 import type { DependencyContainer } from 'tsyringe';
+import { readFile } from 'fs-extra';
 import { activate, deactivate } from './extension';
 import { LoggerService, LogLevel } from './logging';
 import { WorkflowOrchestratorService } from './symlink-creation/workflow';
 import { DomainError } from './common';
+import {
+    LINK_AUDIT_DOMAIN_ERRORS,
+    LinkAuditService,
+    parseLinkAuditConfiguration,
+} from './link-audit';
 import * as containerSetup from './container';
 
 jest.mock('vscode', () => ({
@@ -18,14 +24,32 @@ jest.mock('vscode', () => ({
         showInformationMessage: jest.fn(),
         showOpenDialog: jest.fn(),
         showQuickPick: jest.fn(),
+        showWorkspaceFolderPick: jest.fn(),
         createOutputChannel: jest.fn(),
     },
     workspace: {
         getConfiguration: jest.fn(),
         onDidChangeConfiguration: jest.fn(),
+        workspaceFolders: [],
     },
     Uri: {
         file: jest.fn(),
+    },
+}));
+
+jest.mock('fs-extra', () => ({
+    readFile: jest.fn(),
+}));
+
+jest.mock('./link-audit', () => ({
+    LinkAuditService: jest.fn(),
+    parseLinkAuditConfiguration: jest.fn(),
+    LINK_AUDIT_DOMAIN_ERRORS: {
+        CONFIG_PARSE: {
+            key: 'LINK_AUDIT_CONFIG_PARSE',
+            message: 'Invalid configuration',
+            description: 'The provided configuration could not be parsed.',
+        },
     },
 }));
 
@@ -33,11 +57,15 @@ jest.mock('./container');
 jest.mock('./logging');
 jest.mock('./symlink-creation/workflow');
 
+type ReadFileStringMock = jest.MockedFunction<(path: string, encoding?: string) => Promise<string>>;
+
 describe('extension', () => {
     let mockContext: Partial<vscode.ExtensionContext>;
     let mockOutputChannel: Partial<vscode.OutputChannel>;
     let mockLogger: Partial<LoggerService>;
     let mockWorkflowService: Partial<WorkflowOrchestratorService>;
+    let mockLinkAuditService: { execute: jest.Mock };
+    let mockReadFile: ReadFileStringMock;
     let mockContainer: Partial<DependencyContainer>;
     let mockConfiguration: Partial<vscode.WorkspaceConfiguration>;
 
@@ -72,6 +100,15 @@ describe('extension', () => {
             executeFromConfigFile: jest.fn(),
         };
 
+        mockLinkAuditService = {
+            execute: jest.fn().mockResolvedValue([
+                {
+                    report: { itemCount: 0 } as any,
+                    outputPath: '/workspace/root/audit-report.json',
+                } as any,
+            ]),
+        };
+
         // Setup mock DI container
         mockContainer = {
             resolve: jest.fn().mockImplementation((token: any) => {
@@ -80,6 +117,9 @@ describe('extension', () => {
                 }
                 if (token === WorkflowOrchestratorService) {
                     return mockWorkflowService;
+                }
+                if (token === LinkAuditService) {
+                    return mockLinkAuditService;
                 }
                 if (token === 'OutputChannel') {
                     return mockOutputChannel;
@@ -103,6 +143,17 @@ describe('extension', () => {
         });
         (vscode.window.showErrorMessage as jest.Mock).mockResolvedValue(undefined);
         (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        (vscode.window.showWorkspaceFolderPick as jest.Mock).mockResolvedValue(undefined);
+
+        (vscode.workspace as unknown as { workspaceFolders?: unknown[] }).workspaceFolders = [
+            { uri: { fsPath: '/workspace/root' } },
+        ];
+
+        mockReadFile = readFile as unknown as ReadFileStringMock;
+        mockReadFile.mockResolvedValue('{}');
+        (parseLinkAuditConfiguration as jest.Mock).mockReturnValue([
+            { name: 'default-collection' },
+        ]);
 
         // Setup container setup mock
         (containerSetup.setupContainer as jest.Mock).mockReturnValue(mockContainer);
@@ -137,10 +188,10 @@ describe('extension', () => {
                 'Logging system initialized',
                 expect.any(Object)
             );
-            expect(mockRegisterCommand).toHaveBeenCalledTimes(3);
+            expect(mockRegisterCommand).toHaveBeenCalledTimes(4);
         });
 
-        test('should register all three commands with correct names', async () => {
+        test('should register all commands with correct names', async () => {
             // Arrange
             const mockRegisterCommand = vscode.commands.registerCommand as jest.Mock;
 
@@ -148,6 +199,10 @@ describe('extension', () => {
             await activate(mockContext as vscode.ExtensionContext);
 
             // Assert
+            expect(mockRegisterCommand).toHaveBeenCalledWith(
+                'filesystemLinkManager.auditLinks',
+                expect.any(Function)
+            );
             expect(mockRegisterCommand).toHaveBeenCalledWith(
                 'filesystemLinkManager.executeFromSettings',
                 expect.any(Function)
@@ -174,7 +229,7 @@ describe('extension', () => {
             await activate(mockContext as vscode.ExtensionContext);
 
             // Assert
-            expect(mockContext.subscriptions?.length).toBe(4); // 3 commands + 1 config listener
+            expect(mockContext.subscriptions?.length).toBe(5); // 4 commands + 1 config listener
         });
 
         test('should setup configuration change listener for logging level updates', async () => {
@@ -331,6 +386,228 @@ describe('extension', () => {
                 'filesystemLinkManager.logging'
             );
             expect(mockLogger.setLevel).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Command: auditLinks', () => {
+        test('should execute link audit successfully and display report locations', async () => {
+            // Arrange
+            const auditReport = {
+                report: { itemCount: 2 } as any,
+                outputPath: '/workspace/root/link-audit/report.json',
+            };
+            mockReadFile.mockResolvedValueOnce('{"collections":[]}');
+            (parseLinkAuditConfiguration as jest.Mock).mockReturnValueOnce([
+                { name: 'collection-a' },
+            ]);
+            mockLinkAuditService.execute.mockResolvedValueOnce([auditReport]);
+            (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([
+                { fsPath: '/workspace/root/link-audit.config.json' },
+            ]);
+            (vscode.window.showInformationMessage as jest.Mock).mockResolvedValueOnce(
+                'Show Details'
+            );
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(mockReadFile).toHaveBeenCalledWith(
+                '/workspace/root/link-audit.config.json',
+                'utf8'
+            );
+            expect(parseLinkAuditConfiguration).toHaveBeenCalledWith({ collections: [] });
+            expect(mockLinkAuditService.execute).toHaveBeenCalledWith({
+                workspaceRoot: '/workspace/root',
+                collections: [{ name: 'collection-a' }],
+            });
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'Link audit completed for 1 collection (2 items).',
+                'Show Details'
+            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                'Link audit completed for 1 collection (2 items).'
+            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Generated reports:');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                '• /workspace/root/link-audit/report.json'
+            );
+            expect(mockOutputChannel.show).toHaveBeenCalled();
+        });
+
+        test('should require an open workspace folder before running audit', async () => {
+            // Arrange
+            (vscode.workspace as unknown as { workspaceFolders?: unknown[] }).workspaceFolders =
+                undefined;
+            (vscode.window.showErrorMessage as jest.Mock).mockResolvedValue(undefined);
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                'Link audit requires an open workspace folder.'
+            );
+            expect(mockLinkAuditService.execute).not.toHaveBeenCalled();
+        });
+
+        test('should handle user cancelling workspace folder selection', async () => {
+            // Arrange
+            (vscode.workspace as unknown as { workspaceFolders?: unknown[] }).workspaceFolders = [
+                { uri: { fsPath: '/workspace/root-1' } },
+                { uri: { fsPath: '/workspace/root-2' } },
+            ];
+            (vscode.window.showWorkspaceFolderPick as jest.Mock).mockResolvedValueOnce(undefined);
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(vscode.window.showOpenDialog).not.toHaveBeenCalled();
+            expect(mockLinkAuditService.execute).not.toHaveBeenCalled();
+        });
+
+        test('should handle user cancelling configuration selection', async () => {
+            // Arrange
+            (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce(undefined);
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(mockReadFile).not.toHaveBeenCalled();
+            expect(mockLinkAuditService.execute).not.toHaveBeenCalled();
+        });
+
+        test('should handle undefined configuration entry in selection array', async () => {
+            // Arrange
+            (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([undefined]);
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(mockReadFile).not.toHaveBeenCalled();
+            expect(mockLinkAuditService.execute).not.toHaveBeenCalled();
+        });
+
+        test('should present domain error details from execution failures', async () => {
+            // Arrange
+            (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([
+                { fsPath: '/workspace/root/link-audit.config.json' },
+            ]);
+            const domainError = new DomainError(LINK_AUDIT_DOMAIN_ERRORS.CONFIG_PARSE, {
+                cause: new Error('Validation failed'),
+            });
+            mockLinkAuditService.execute.mockRejectedValueOnce(domainError);
+            (vscode.window.showErrorMessage as jest.Mock).mockResolvedValueOnce('Show Details');
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                'Link audit command failed: Invalid configuration',
+                'Show Details'
+            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                'Link audit command failed: Invalid configuration'
+            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('Stack trace:')
+            );
+            expect(mockOutputChannel.show).toHaveBeenCalled();
+        });
+
+        test('should wrap configuration read errors in domain error and notify user', async () => {
+            // Arrange
+            const fileReadError = new Error('File read failure');
+            (vscode.window.showOpenDialog as jest.Mock).mockResolvedValueOnce([
+                { fsPath: '/workspace/root/link-audit.config.json' },
+            ]);
+            mockReadFile.mockRejectedValueOnce(fileReadError);
+            (vscode.window.showErrorMessage as jest.Mock).mockResolvedValueOnce('Show Details');
+
+            let auditCommandHandler: () => Promise<void> = jest.fn();
+            (vscode.commands.registerCommand as jest.Mock).mockImplementation((name, handler) => {
+                if (name === 'filesystemLinkManager.auditLinks') {
+                    auditCommandHandler = handler;
+                }
+                return { dispose: jest.fn() };
+            });
+
+            await activate(mockContext as vscode.ExtensionContext);
+
+            // Act
+            await auditCommandHandler();
+
+            // Assert
+            expect(parseLinkAuditConfiguration).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                'Link audit command failed: Invalid configuration',
+                'Show Details'
+            );
         });
     });
 

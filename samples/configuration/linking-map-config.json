@@ -1,0 +1,13 @@
+{
+    "searchPatterns": [
+        {
+            "patternType": "glob",
+            "pattern": "**/*.cs"
+        },
+        {
+            "patternType": "glob",
+            "pattern": "**/*.csproj"
+        }
+    ],
+    "outputRelativePath": ".filesystem-link-manager/link-map/link-map.json"
+}

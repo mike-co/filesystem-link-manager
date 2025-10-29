@@ -1,14 +1,15 @@
 import { z } from 'zod';
 import { DomainError } from '../../../common';
 import { CONFIG_DOMAIN_ERRORS } from '../config-domain-errors.const';
+import { isPathMappingEntry } from './is-path-mapping-entry.function';
 import type { FileSystemOperationConfig } from '../types/core/file-system-operation-config.interface';
 
 /**
  * Validates all configuration properties against defined schema before processing.
  * Uses zod validation to prevent injection attacks and ensure type safety.
  * Validates silent mode configuration requirements with graceful error handling.
- * Enforces pattern type validation where 'path' patterns can be string or string[],
- * while all other pattern types must be string only.
+ * Enforces pattern type validation where 'path' patterns can be string, string[], path mapping objects,
+ * or arrays of path mapping objects, while all other pattern types must be string only.
  * 
  * @param config - Configuration object to validate
  * @returns Promise resolving to validation result with detailed error information
@@ -33,6 +34,7 @@ export function validateConfig(config: unknown): Promise<void> {
             if (configObj.operations) {
                 for (const operation of configObj.operations) {
                     validateHardlinkCompatibility(operation);
+                    validatePathMappingCompatibility(operation);
                 }
             }
     });
@@ -60,6 +62,71 @@ export function validateHardlinkCompatibility(operation: unknown): void {
     // Valid cases: hardlink with file itemType, or any other action
 }
 
+const searchPatternContainsPathMapping = (pattern: unknown): boolean => {
+    if (pattern === null || typeof pattern !== 'object' || Array.isArray(pattern)) {
+        return false;
+    }
+
+    const candidate = pattern as Partial<{ patternType?: unknown; pattern?: unknown }>;
+
+    if (candidate.patternType !== 'path') {
+        return false;
+    }
+
+    const patternValue = candidate.pattern;
+
+    if (Array.isArray(patternValue)) {
+        return patternValue.some(entry => isPathMappingEntry(entry));
+    }
+
+    return isPathMappingEntry(patternValue);
+};
+
+const getPathMappingError = (): DomainError => {
+    const error = new DomainError(CONFIG_DOMAIN_ERRORS.CONFIG_TYPE);
+    error.message = 'Path mapping entries are only supported for copy and hardlink file operations.';
+    return error;
+};
+
+const operationContainsPathMapping = (operation: unknown): boolean => {
+    if (operation === null || typeof operation !== 'object') {
+        return false;
+    }
+
+    const candidate = operation as Partial<{ searchPatterns?: unknown[] }>;
+
+    if (!Array.isArray(candidate.searchPatterns)) {
+        return false;
+    }
+
+    return candidate.searchPatterns.some(searchPatternContainsPathMapping);
+};
+
+const isSupportedForPathMappings = (operation: unknown): boolean => {
+    if (operation === null || typeof operation !== 'object') {
+        return false;
+    }
+
+    const candidate = operation as Partial<{ action?: unknown; itemType?: unknown }>;
+
+    const isCopyOrHardlink = candidate.action === 'copy' || candidate.action === 'hardlink';
+    const isFileItemType = candidate.itemType === 'file';
+
+    return Boolean(isCopyOrHardlink && isFileItemType);
+};
+
+const validatePathMappingCompatibility = (operation: unknown): void => {
+    if (!operationContainsPathMapping(operation)) {
+        return;
+    }
+
+    if (isSupportedForPathMappings(operation)) {
+        return;
+    }
+
+    throw getPathMappingError();
+};
+
 /**
  * Creates schema for search pattern validation with comprehensive pattern type support.
  * Enforces that 'path' patterns can be string or string[], while other types must be string only.
@@ -67,21 +134,58 @@ export function validateHardlinkCompatibility(operation: unknown): void {
  * @param disableRegexValidation - Whether to skip regex-based validation for patterns
  * @returns Zod schema for search pattern validation
  */
+const pathMappingEntrySchema = z.object({
+    sourcePath: z.string()
+        .min(1, { message: 'Path mapping sourcePath must be a non-empty string' })
+        .refine(value => value.trim().length > 0, { message: 'Path mapping sourcePath cannot be whitespace' }),
+    destinationPath: z.string()
+        .min(1, { message: 'Path mapping destinationPath must be a non-empty string' })
+        .refine(value => value.trim().length > 0, { message: 'Path mapping destinationPath cannot be whitespace' }),
+}).strict();
+
+const pathPatternMixedArraySchema = z.array(z.union([
+    z.string().min(1, { message: 'Pattern array elements cannot be empty' }),
+    pathMappingEntrySchema
+])).min(1, { message: 'Pattern array cannot be empty' });
+
 const createSearchPatternSchema = (disableRegexValidation?: boolean) => z.object({
     patternType: z.enum(['glob', 'regex', 'ignore-rules-file-path', 'path'], {
         errorMap: () => ({ message: 'Pattern type must be "glob", "regex", "ignore-rules-file-path", or "path"' }),
     }),
     pattern: z.union([
         z.string().min(1, { message: 'Pattern cannot be empty' }),
-        z.array(z.string().min(1, { message: 'Pattern array elements cannot be empty' })).min(1, { message: 'Pattern array cannot be empty' })
+        z.array(z.string().min(1, { message: 'Pattern array elements cannot be empty' })).min(1, { message: 'Pattern array cannot be empty' }),
+        pathMappingEntrySchema,
+        z.array(pathMappingEntrySchema).min(1, { message: 'Path mapping entry array cannot be empty' }),
+        pathPatternMixedArraySchema
     ]),
 }).superRefine((data, ctx) => {
-    // Pattern type-specific validation: only 'path' patterns can be arrays
+    const isPathMappingObject = (value: unknown): value is { sourcePath: string; destinationPath: string } => {
+        if (Array.isArray(value) || value === null || typeof value !== 'object') {
+            return false;
+        }
+
+        const candidate = value as Partial<{ sourcePath: unknown; destinationPath: unknown }>;
+        return typeof candidate.sourcePath === 'string' && typeof candidate.destinationPath === 'string';
+    };
+
+    const arrayContainsPathMappings = Array.isArray(data.pattern) && data.pattern.some(entry => isPathMappingObject(entry));
+
+    // Pattern type-specific validation: only 'path' patterns can be arrays or path mapping entries
     if (data.patternType !== 'path' && Array.isArray(data.pattern)) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['pattern'],
             message: `Pattern type "${data.patternType}" must be a string, not an array. Only "path" patterns can be arrays.`,
+        });
+        return;
+    }
+
+    if (data.patternType !== 'path' && (isPathMappingObject(data.pattern) || arrayContainsPathMappings)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['pattern'],
+            message: `Pattern type "${data.patternType}" does not support path mapping objects. Use patternType "path" for source-to-destination mappings.`,
         });
         return;
     }
@@ -92,7 +196,11 @@ const createSearchPatternSchema = (disableRegexValidation?: boolean) => z.object
 
     // Comprehensive regex validation with ReDoS protection
     if (data.patternType === 'regex') {
-        const patternString = Array.isArray(data.pattern) ? data.pattern.join('|') : data.pattern;
+        if (typeof data.pattern !== 'string') {
+            return;
+        }
+
+        const patternString = data.pattern;
 
         try {
             // Advanced ReDoS pattern detection
@@ -153,7 +261,11 @@ const createSearchPatternSchema = (disableRegexValidation?: boolean) => z.object
 
     // Pattern-specific validation for different pattern types
     if (data.patternType === 'glob') {
-        const patternString = Array.isArray(data.pattern) ? data.pattern.join(' ') : data.pattern;
+        if (typeof data.pattern !== 'string') {
+            return;
+        }
+
+        const patternString = data.pattern;
 
         // Basic glob pattern validation
         if (patternString.includes('**/**')) {
@@ -166,7 +278,11 @@ const createSearchPatternSchema = (disableRegexValidation?: boolean) => z.object
     }
 
     if (data.patternType === 'ignore-rules-file-path') {
-        const patternString = Array.isArray(data.pattern) ? data.pattern.join(' ') : data.pattern;
+        if (typeof data.pattern !== 'string') {
+            return;
+        }
+
+        const patternString = data.pattern;
 
         // Validate ignore rules file path format
         if (patternString.trim() !== patternString) {

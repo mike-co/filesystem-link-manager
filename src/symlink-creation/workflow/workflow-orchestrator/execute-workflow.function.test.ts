@@ -337,6 +337,265 @@ describe('execute-workflow.function', () => {
             expect(result).toBe(true);
             expect(mockParams.copyManagerService.copyDirectories).toHaveBeenCalled();
         });
+
+        test('should retain duplicate source paths with unique destination overrides', async () => {
+            // Arrange
+            const baseDirectoryPath = path.join(tmpRoot, 'source');
+            const targetDirectoryPath = path.join(tmpRoot, 'target');
+            const operationDestinationPath = 'custom/base';
+            const mappingEntryA = {
+                sourcePath: 'docs/file.txt',
+                destinationPath: 'renamed/version-a.txt',
+            } as const;
+            const mappingEntryB = {
+                sourcePath: 'docs/file.txt',
+                destinationPath: 'renamed/version-b.txt',
+            } as const;
+            const discoveredSourcePath = path.join(baseDirectoryPath, mappingEntryA.sourcePath);
+
+            const mockConfig = {
+                targetDirectoryPath,
+                operations: [
+                    {
+                        itemType: 'file' as const,
+                        action: 'copy' as const,
+                        baseDirectoryPath,
+                        destinationPath: operationDestinationPath,
+                        searchPatterns: [
+                            {
+                                patternType: 'path' as const,
+                                pattern: [mappingEntryA, mappingEntryB],
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            mockParams.configParserService.parseConfiguration = jest
+                .fn()
+                .mockResolvedValue(mockConfig);
+
+            mockParams.fileDiscoveryService.discoverFiles = jest
+                .fn()
+                .mockResolvedValueOnce([discoveredSourcePath])
+                .mockResolvedValueOnce([discoveredSourcePath]);
+
+            // Act
+            const result = await executeWorkflow(mockParams);
+
+            // Assert
+            expect(result).toBe(true);
+            expect(mockParams.copyManagerService.copyFiles).toHaveBeenCalledTimes(1);
+
+            const copyFilesArgs = mockParams.copyManagerService.copyFiles as jest.Mock;
+            const operations = copyFilesArgs.mock.calls[0][0] as Array<{
+                sourcePath: string;
+                destinationPath: string;
+            }>;
+
+            expect(operations).toHaveLength(2);
+            const destinationPaths = operations.map(operation => operation.destinationPath);
+            const expectedDestinationA = path.resolve(
+                targetDirectoryPath,
+                operationDestinationPath,
+                mappingEntryA.destinationPath
+            );
+            const expectedDestinationB = path.resolve(
+                targetDirectoryPath,
+                operationDestinationPath,
+                mappingEntryB.destinationPath
+            );
+
+            expect(destinationPaths).toEqual(
+                expect.arrayContaining([expectedDestinationA, expectedDestinationB])
+            );
+            operations.forEach(operation => {
+                expect(operation.sourcePath).toBe(discoveredSourcePath);
+            });
+        });
+
+        test('should deduplicate duplicate source paths sharing destination overrides', async () => {
+            // Arrange
+            const baseDirectoryPath = path.join(tmpRoot, 'source');
+            const targetDirectoryPath = path.join(tmpRoot, 'target');
+            const operationDestinationPath = 'custom/base';
+            const mappingEntryA = {
+                sourcePath: 'docs/file.txt',
+                destinationPath: 'renamed/shared.txt',
+            } as const;
+            const mappingEntryB = {
+                sourcePath: 'docs/file.txt',
+                destinationPath: 'renamed/shared.txt',
+            } as const;
+            const discoveredSourcePath = path.join(baseDirectoryPath, mappingEntryA.sourcePath);
+
+            const mockConfig = {
+                targetDirectoryPath,
+                operations: [
+                    {
+                        itemType: 'file' as const,
+                        action: 'copy' as const,
+                        baseDirectoryPath,
+                        destinationPath: operationDestinationPath,
+                        searchPatterns: [
+                            {
+                                patternType: 'path' as const,
+                                pattern: [mappingEntryA, mappingEntryB],
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            mockParams.configParserService.parseConfiguration = jest
+                .fn()
+                .mockResolvedValue(mockConfig);
+
+            mockParams.fileDiscoveryService.discoverFiles = jest
+                .fn()
+                .mockResolvedValueOnce([discoveredSourcePath])
+                .mockResolvedValueOnce([discoveredSourcePath]);
+
+            // Act
+            const result = await executeWorkflow(mockParams);
+
+            // Assert
+            expect(result).toBe(true);
+            expect(mockParams.copyManagerService.copyFiles).toHaveBeenCalledTimes(1);
+
+            const copyFilesArgs = mockParams.copyManagerService.copyFiles as jest.Mock;
+            const operations = copyFilesArgs.mock.calls[0][0] as Array<{
+                sourcePath: string;
+                destinationPath: string;
+            }>;
+
+            expect(operations).toHaveLength(1);
+            const [operation] = operations;
+            expect(operation).toBeDefined();
+            expect(operation?.sourcePath).toBe(discoveredSourcePath);
+            expect(operation?.destinationPath).toBe(
+                path.resolve(
+                    targetDirectoryPath,
+                    operationDestinationPath,
+                    mappingEntryA.destinationPath
+                )
+            );
+        });
+
+        describe('path mapping entries', () => {
+            test('should apply destination overrides from path mapping search patterns', async () => {
+                // Arrange
+                const baseDirectoryPath = path.join(tmpRoot, 'source');
+                const targetDirectoryPath = path.join(tmpRoot, 'target');
+                const operationDestinationPath = 'custom/base';
+                const mappingEntry = {
+                    sourcePath: 'docs/file1.txt',
+                    destinationPath: 'renamed/file1-renamed.txt',
+                } as const;
+                const regularPath = 'docs/file2.txt';
+                const mockConfig = {
+                    targetDirectoryPath,
+                    operations: [
+                        {
+                            itemType: 'file' as const,
+                            action: 'copy' as const,
+                            baseDirectoryPath,
+                            destinationPath: operationDestinationPath,
+                            searchPatterns: [
+                                {
+                                    patternType: 'path' as const,
+                                    pattern: [mappingEntry, regularPath],
+                                },
+                            ],
+                        },
+                    ],
+                };
+
+                const discoveredRegularPath = path.join(baseDirectoryPath, regularPath);
+                const discoveredMappingPath = path.join(baseDirectoryPath, mappingEntry.sourcePath);
+
+                mockParams.configParserService.parseConfiguration = jest
+                    .fn()
+                    .mockResolvedValue(mockConfig);
+
+                mockParams.fileDiscoveryService.discoverFiles = jest
+                    .fn()
+                    .mockResolvedValueOnce([discoveredRegularPath])
+                    .mockResolvedValueOnce([discoveredMappingPath]);
+
+                // Act
+                const result = await executeWorkflow(mockParams);
+
+                // Assert
+                expect(result).toBe(true);
+                expect(mockParams.fileDiscoveryService.discoverFiles).toHaveBeenCalledTimes(2);
+
+                const discoverFilesMock = mockParams.fileDiscoveryService
+                    .discoverFiles as jest.Mock;
+                const [regularCallArgs, mappingCallArgs] = discoverFilesMock.mock.calls;
+                const regularPatterns = regularCallArgs[1] as Array<{ pattern: unknown }>;
+                const mappingPatterns = mappingCallArgs[1] as Array<{ pattern: unknown }>;
+
+                const regularPatternsContainMappingEntries = regularPatterns.some(
+                    ({ pattern: patternValue }) => {
+                        if (Array.isArray(patternValue)) {
+                            return patternValue.some(value => {
+                                if (typeof value !== 'object' || value === null) {
+                                    return false;
+                                }
+
+                                return 'sourcePath' in (value as Record<string, unknown>);
+                            });
+                        }
+
+                        if (typeof patternValue !== 'object' || patternValue === null) {
+                            return false;
+                        }
+
+                        return 'sourcePath' in (patternValue as Record<string, unknown>);
+                    }
+                );
+
+                expect(regularPatternsContainMappingEntries).toBe(false);
+                expect(mappingPatterns).toHaveLength(1);
+                const mappingPatternEntry = mappingPatterns[0];
+                expect(mappingPatternEntry).toBeDefined();
+                expect(mappingPatternEntry?.pattern).toEqual(expect.objectContaining(mappingEntry));
+
+                expect(mockParams.copyManagerService.copyFiles).toHaveBeenCalledTimes(1);
+                const copyFilesMock = mockParams.copyManagerService.copyFiles as jest.Mock;
+                const copyOperations = copyFilesMock.mock.calls[0][0] as Array<{
+                    destinationPath: string;
+                    sourcePath: string;
+                }>;
+
+                expect(copyOperations).toHaveLength(2);
+
+                const mappingOperation = copyOperations.find(operation => {
+                    return operation.sourcePath === discoveredMappingPath;
+                });
+                expect(mappingOperation).toBeDefined();
+                expect(mappingOperation?.destinationPath).toBe(
+                    path.resolve(
+                        targetDirectoryPath,
+                        operationDestinationPath,
+                        mappingEntry.destinationPath
+                    )
+                );
+
+                const regularOperation = copyOperations.find(operation => {
+                    return operation.sourcePath === discoveredRegularPath;
+                });
+                expect(regularOperation).toBeDefined();
+                expect(regularOperation?.destinationPath).toBe(
+                    path.resolve(
+                        targetDirectoryPath,
+                        operationDestinationPath,
+                        path.relative(baseDirectoryPath, discoveredRegularPath)
+                    )
+                );
+            });
+        });
     });
 
     describe('Deduplication handling', () => {

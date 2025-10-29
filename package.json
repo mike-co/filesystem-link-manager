@@ -41,6 +41,11 @@
     "contributes": {
         "commands": [
             {
+                "command": "filesystemLinkManager.auditLinks",
+                "title": "Audit Links",
+                "category": "FileSystem Link Manager"
+            },
+            {
                 "command": "filesystemLinkManager.executeFromSettings",
                 "title": "Execute from Settings",
                 "category": "FileSystem Link Manager"
@@ -252,7 +257,7 @@
         "test:coverage": "jest --coverage",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
-        "clean": "rimraf out out-tests dist coverage",
+        "clean": "rimraf out out-test dist coverage",
         "build": "npm run clean && npm run compile",
         "build:bundle": "npm run clean && npm run webpack",
         "watch:webpack": "webpack --mode development --watch",
