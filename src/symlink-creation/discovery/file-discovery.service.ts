@@ -2,7 +2,8 @@ import { normalize } from 'path';
 import { injectable } from 'tsyringe';
 import { DomainError } from '../../common';
 import { LoggerService } from '../../logging';
-import type { SearchPatternBase } from '../config';
+import { isPathMappingEntry } from '../config';
+import type { PathMappingEntry, SearchPatternBase } from '../config';
 import { DISCOVERY_DOMAIN_ERRORS } from './discovery-domain-errors.const';
 import { countFilesInDirectories } from './file-discovery/count-files-in-directories.function';
 import {
@@ -18,7 +19,7 @@ import {
 import { normalizeDirectoryPaths } from './file-discovery/normalize-directory-paths.function';
 import { processIgnoreRulesFile } from './file-discovery/process-ignore-rules.function';
 import { processRegexPattern } from './file-discovery/process-regex-patterns.function';
-
+import type { FileDiscoveryOptions } from './types/file-discovery-options.interface';
 
 /**
  * File discovery orchestrator service for discovering files and directories.
@@ -41,12 +42,14 @@ export class FileDiscoveryService {
      * @param baseDirectoryPath Base directory path to search within
      * @param searchPatterns Array of search patterns to match against files or directories
      * @param mode Discovery mode specifying whether to discover 'files' or 'directories'
+     * @param options Optional discovery behavior overrides
      * @returns Promise resolving to array of discovered absolute paths
      */
     private async discoverCommon(
         baseDirectoryPath: string, 
         searchPatterns: SearchPatternBase[], 
-        mode: 'files' | 'directories'
+        mode: 'files' | 'directories',
+        options?: FileDiscoveryOptions
     ): Promise<string[]> {
         this.loggerService.debug(`Discovering ${mode} in ${baseDirectoryPath} with ${searchPatterns.length} patterns`, {
             operation: `${mode}Discovery`,
@@ -57,25 +60,27 @@ export class FileDiscoveryService {
 
         for (const searchPattern of searchPatterns) {
             if (searchPattern.patternType === 'path') {
-                if(mode === 'files') {
-                    const files = await discoverFilesWithPath(baseDirectoryPath, searchPattern.pattern);
-                    allDiscovered.push(...files);
-                } else if(mode === 'directories') {
-                    const files = await discoverDirectoriesWithPath(baseDirectoryPath, searchPattern.pattern);
+                const normalizedPattern = this.normalizePathPatternForDiscovery(searchPattern.pattern);
+
+                if (mode === 'files') {
+                    const files = await discoverFilesWithPath(baseDirectoryPath, normalizedPattern);
                     allDiscovered.push(...files);
                 }
-
+                else if (mode === 'directories') {
+                    const directories = await discoverDirectoriesWithPath(baseDirectoryPath, normalizedPattern);
+                    allDiscovered.push(...directories);
+                }
             } else if (searchPattern.patternType === 'glob') {
                 // Use extracted function for glob pattern discovery
                 const globResults = mode === 'files' 
-                    ? await discoverFilesWithGlob(baseDirectoryPath, searchPattern.pattern as string)
-                    : await discoverDirectoriesWithGlob(baseDirectoryPath, searchPattern.pattern as string);
+                    ? await discoverFilesWithGlob(baseDirectoryPath, searchPattern.pattern as string, options)
+                    : await discoverDirectoriesWithGlob(baseDirectoryPath, searchPattern.pattern as string, options);
                 allDiscovered.push(...globResults);
             } else if (searchPattern.patternType === 'regex') {
                 // Use extracted functions for regex pattern processing
                 const allItems = mode === 'files'
-                    ? await discoverAllFiles(baseDirectoryPath)
-                    : await discoverAllDirectories(baseDirectoryPath);
+                    ? await discoverAllFiles(baseDirectoryPath, options)
+                    : await discoverAllDirectories(baseDirectoryPath, options);
                 const regexResults = processRegexPattern(
                     allItems,
                     searchPattern.pattern as string,
@@ -96,15 +101,15 @@ export class FileDiscoveryService {
                     
                     // First, find all items excluding the ignore patterns
                     const allItems = mode === 'files'
-                        ? await discoverFilesWithIgnore(baseDirectoryPath, ignorePatterns)
-                        : await discoverDirectoriesWithIgnore(baseDirectoryPath, ignorePatterns);
+                        ? await discoverFilesWithIgnore(baseDirectoryPath, ignorePatterns, options)
+                        : await discoverDirectoriesWithIgnore(baseDirectoryPath, ignorePatterns, options);
                     
                     // If there are negation patterns, find items that match them and add them back
                     if (negationPatterns.length > 0) {
                         for (const negationPattern of negationPatterns) {
                             const negatedItems = mode === 'files'
-                                ? await discoverFilesWithGlob(baseDirectoryPath, negationPattern)
-                                : await discoverDirectoriesWithGlob(baseDirectoryPath, negationPattern);
+                                ? await discoverFilesWithGlob(baseDirectoryPath, negationPattern, options)
+                                : await discoverDirectoriesWithGlob(baseDirectoryPath, negationPattern, options);
                             
                             // Add back the negated items that were excluded by ignore patterns
                             for (const negatedItem of negatedItems) {
@@ -147,8 +152,12 @@ export class FileDiscoveryService {
      * @param searchPatterns Array of search patterns to match files against
      * @returns Promise resolving to array of discovered absolute file paths
      */
-    public async discoverFiles(baseDirectoryPath: string, searchPatterns: SearchPatternBase[]): Promise<string[]> {
-        return this.discoverCommon(baseDirectoryPath, searchPatterns, 'files');
+    public async discoverFiles(
+        baseDirectoryPath: string,
+        searchPatterns: SearchPatternBase[],
+        options?: FileDiscoveryOptions
+    ): Promise<string[]> {
+        return this.discoverCommon(baseDirectoryPath, searchPatterns, 'files', options);
     }
 
     /**
@@ -189,7 +198,40 @@ export class FileDiscoveryService {
      * @param searchPatterns Array of search patterns to match directories against
      * @returns Promise resolving to array of distinct top-level directory absolute paths
      */
-    public async discoverDirectories(baseDirectoryPath: string, searchPatterns: SearchPatternBase[]): Promise<string[]> {
-        return this.discoverCommon(baseDirectoryPath, searchPatterns, 'directories');
+    public async discoverDirectories(
+        baseDirectoryPath: string,
+        searchPatterns: SearchPatternBase[],
+        options?: FileDiscoveryOptions
+    ): Promise<string[]> {
+        return this.discoverCommon(baseDirectoryPath, searchPatterns, 'directories', options);
+    }
+
+    private normalizePathPatternForDiscovery(
+        pattern: string | PathMappingEntry | Array<string | PathMappingEntry>
+    ): string | string[] {
+        if (typeof pattern === 'string') {
+            return pattern;
+        }
+
+        if (Array.isArray(pattern)) {
+            const normalizedEntries: string[] = [];
+
+            for (const entry of pattern) {
+                if (typeof entry === 'string') {
+                    normalizedEntries.push(entry);
+                }
+                else if (isPathMappingEntry(entry)) {
+                    normalizedEntries.push(entry.sourcePath);
+                }
+            }
+
+            return normalizedEntries;
+        }
+
+        if (isPathMappingEntry(pattern)) {
+            return pattern.sourcePath;
+        }
+
+        return [];
     }
 }

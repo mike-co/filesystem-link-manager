@@ -23,12 +23,12 @@ coverage/
 **/*.test.*
 **/*.spec.*
 test/
-
 # -----------------------------
 # Source files (we ship bundled JS in dist/)
 # -----------------------------
 src/
 out/
+out-test/
 **/*.ts
 **/*.tsx
 tsconfig.json
@@ -46,7 +46,7 @@ webpack.config.js
 # Samples and other repo-only artifacts
 # -----------------------------
 samples/
-
+assets/filesystem-link-manager-example1.gif
 # -----------------------------
 # Editor/OS files
 # -----------------------------

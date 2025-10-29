@@ -4,6 +4,15 @@ All notable changes to the "filesystem-link-manager" VS Code extension are docum
 
 This project adheres to Keep a Changelog (https://keepachangelog.com/) and follows Semantic Versioning.
 
+## [1.0.0] - 2025-10-29
+
+### Added
+- Comprehensive README with step-by-step configuration examples, sample workspace, and troubleshooting guidance.
+- JSON-driven workspace creation: support for symlink, hardlink, and copy operations; file attribute adjustments; post-execution commands.
+- Link audit feature that generates workspace-to-source mapping reports to aid builds and navigation.
+- Included sample configurations and a packaged monorepo sample under `samples/` for easy testing and demos.
+- `copy` and `hardlink` operations with `itemType: "file"` and `patternType: "path"`, can rename files during the operation using the `sourcePath`/`destinationPath`.
+
 ## [0.3.0] - 2025-09-11
 
 ### Added

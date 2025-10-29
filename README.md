@@ -6,7 +6,7 @@ A VS Code extension that helps developers create efficient workspaces by linking
 
 ## Examples
 
-![Filesystem Link Manager](./assets/filesystem-link-manager-example1.gif "Filesystem Link Manager")
+![Filesystem Link Manager](https://github.com/mike-co/filesystem-link-manager/blob/main/assets/filesystem-link-manager-example1.gif?raw=true "Filesystem Link Manager")
 
 ## 🚀 Why Filesystem Link Manager?
 
@@ -50,6 +50,60 @@ Filesystem Link Manager creates optimized workspaces by selectively linking file
 2. Open VS Code
 3. Run command: `Extensions: Install from VSIX...`
 4. Select the downloaded `.vsix` file
+
+## 🚀 Try the Sample Workspace
+
+The [extension repository](https://github.com/mike-co/filesystem-link-manager) includes a ready-to-use sample that demonstrates the complete workflow. This is the fastest way to understand how the extension works.
+
+### What's Included
+
+The repository's `samples/` folder contains:
+- **`monorepo.7z`**: A sample enterprise monorepo structure (extract this first)
+- **`configuration/link-manager-config-authentication-service.json`**: Configuration for creating an authentication service workspace
+- **`configuration/link-manager-config-payment-service.json`**: Configuration for creating a payment service workspace
+- **`configuration/linking-map-config.json`**: Link audit configuration example
+
+### Quick Start Steps
+
+1. **Clone the repository and extract the sample**
+   - Clone: `git clone https://github.com/mike-co/filesystem-link-manager.git`
+   - Navigate to `samples/` folder
+   - Extract `monorepo.7z` to `C:\Monorepo\` (or update paths in the config files)
+   - You should now have `C:\Monorepo\EnterpriseMonorepo\` with the sample structure
+
+2. **Run the Authentication Service Configuration**
+   - Open VS Code
+   - Press `Ctrl+Shift+P` → `FileSystem Link Manager: Execute from Config File`
+   - Select `samples/configuration/link-manager-config-authentication-service.json`
+   - Review the summary and confirm
+   - A new workspace will be created at `C:\Workspaces\AuthenticationServiceWorkspace\`
+
+3. **Explore the Result**
+   - VS Code will automatically open the new workspace
+   - Explore the symlinked directories and hardlinked reference files
+
+4. **Try the Link Audit**
+   - In the new workspace, press `Ctrl+Shift+P` → `FileSystem Link Manager: Audit Links from Config File`
+   - Select `samples/configuration/linking-map-config.json`
+   - Open `.filesystem-link-manager/link-map/link-map.json` to see the audit report
+
+### Sample Monorepo Structure
+
+Once extracted, the sample monorepo demonstrates a typical enterprise C# structure:
+
+```
+C:\Monorepo\EnterpriseMonorepo\
+├── Src\Services\AuthenticationService\    (100 files)
+├── Src\Services\PaymentService\           (50 files)
+├── Src\Core\Security\                     (150 files)
+├── Src\Core\Utilities\                    (50 files)
+├── Src\Shared\Middleware\                 (100 files)
+├── Tests\UnitTests\                       (180 files)
+├── Docs\                                   (20 files)
+└── Templates\.github\                     (config files)
+```
+
+This sample allows you to immediately see how the extension creates focused, AI-optimized workspaces from a large codebase.
 
 ## 🎯 Quick Start Tutorial
 
@@ -240,7 +294,10 @@ Create a folder for your workspace configurations and add both files:
                 },
                 {
                     "patternType": "path",
-                    "pattern": ".github/copilot-instructions-authentication.md"
+                    "pattern": [{
+                        "sourcePath":".github/copilot-instructions-authentication.md", 
+                        "destinationPath": ".github/copilot-instructions.md"
+                    }]
                 }
             ]
         },
@@ -258,12 +315,8 @@ Create a folder for your workspace configurations and add both files:
     ],
     "postExecutionCommands": [
         {
-            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\"",
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\" && git switch -c \"feature/authentication-workspace\"",
             "skipIfPathExists": ".git"
-        },
-        {
-            "command": "git mv \".github/copilot-instructions-authentication.md\" \".github/copilot-instructions.md\" && git commit -m \"Rename copilot-instructions-authentication.md to copilot-instructions.md\"",
-            "skipIfPathExists": ".github/copilot-instructions.md"
         },
         {
             "command": "code C:/Workspaces/AuthenticationServiceWorkspace"
@@ -356,7 +409,10 @@ Create a folder for your workspace configurations and add both files:
                 },
                 {
                     "patternType": "path",
-                    "pattern": ".github/copilot-instructions-payment-service.md"
+                    "pattern": [{
+                        "sourcePath":".github/copilot-instructions-payment-service.md", 
+                        "destinationPath": ".github/copilot-instructions.md"
+                    }]
                 }
             ]
         },
@@ -374,12 +430,8 @@ Create a folder for your workspace configurations and add both files:
     ],
     "postExecutionCommands": [
         {
-            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\"",
+            "command": "git init && git add . && git commit -m \"Authentication service workspace from monorepo\" && git switch -c \"feature/config-payment-workspace\"",
             "skipIfPathExists": ".git"
-        },
-        {
-            "command": "git mv \".github/copilot-instructions-payment-service.md\" \".github/copilot-instructions.md\" && git commit -m \"Rename copilot-instructions-payment-service.md to copilot-instructions.md\"",
-            "skipIfPathExists": ".github/copilot-instructions.md"
         },
         {
             "command": "code C:/Workspaces/PaymentServiceWorkspace"
@@ -540,6 +592,46 @@ For complex matching:
 }
 ```
 
+#### Advanced: File Renaming with sourcePath/destinationPath
+
+For `copy` and `hardlink` operations with `itemType: "file"` and `patternType: "path"`, you can rename files during the operation using the `sourcePath`/`destinationPath` pattern:
+
+```json
+{
+  "action": "copy",
+  "itemType": "file",
+  "baseDirectoryPath": "C:/Monorepo/EnterpriseMonorepo/Templates",
+  "searchPatterns": [
+    {
+      "patternType": "path",
+      "pattern": [
+        {
+          "sourcePath": ".github/copilot-instructions-authentication.md",
+          "destinationPath": ".github/copilot-instructions.md"
+        },
+        {
+          "sourcePath": "config/appsettings.Development.json",
+          "destinationPath": "config/appsettings.json"
+        }
+      ]
+    }
+  ]
+}
+```
+This creates:
+- `C:/Workspaces/AuthenticationServiceWorkspace/.github/copilot-instructions.md` from the authentication-specific template
+- `C:/Workspaces/AuthenticationServiceWorkspace/config/appsettings.json` from the deb app settings
+
+**Common Use Cases:**
+- **Consolidating configuration files**: Rename service-specific configs to generic names
+- **Environment-specific files**: Copy development configs as production templates
+- **Documentation**: Rename service-specific guides to workspace-level documentation
+- **Copilot instructions**: Use service-specific AI instructions as the main `.github/copilot-instructions.md`
+
+**How It Works:**
+- `sourcePath`: Relative to `baseDirectoryPath`, identifies the source file
+- `destinationPath`: Relative to `targetDirectoryPath`, specifies the final file location and name
+
 #### Ignore Rules File
 Use existing `.gitignore` or custom ignore files:
 ```json
@@ -618,6 +710,122 @@ Automatically initialize a Git repository with your workspace:
   ]
 }
 ```
+
+## 🔍 Auditing Links
+
+When working with linked workspaces, you often need to run build commands (like `msbuild`, `dotnet build`, or `npm run build`) against the original monorepo source, not the linked workspace. Link auditing generates a complete map of where your links point, enabling:
+
+- **Build orchestration** in the source repository while developing in the linked workspace
+- **Dependency resolution** for files not included in your focused workspace
+- **Verification** that links point to expected locations
+- **AI-assisted navigation** to source paths for running commands
+
+### Creating a Link Audit Configuration
+
+Create a link audit configuration file (e.g., `link-audit-config.json`):
+
+```json
+{
+  "workspaceRoot": "C:/Workspaces/AuthenticationServiceWorkspace",
+  "collections": [
+    {
+      "outputRelativePath": ".filesystem-link-manager/link-audit-report.json",
+      "searchPatterns": [
+        { "patternType": "glob", "pattern": "**/*.cs" },
+        { "patternType": "glob", "pattern": "**/*.csproj" }
+      ]
+    }
+  ]
+}
+```
+
+### Running the Link Audit
+
+1. Open VS Code in your linked workspace
+2. Press `Ctrl+Shift+P` to open Command Palette
+3. Type: `FileSystem Link Manager: Audit Links from Config File`
+4. Select your `link-audit-config.json` file
+5. The audit report will be generated at the specified output path
+
+### Understanding the Audit Report
+
+The generated JSON report contains detailed information about each discovered file:
+
+**Example Output** (`.filesystem-link-manager/link-audit-report.json`):
+```json
+{
+  "generatedAt": "2025-10-29T14:30:00.000Z",
+  "workspaceRoot": "C:\\Workspaces\\AuthenticationServiceWorkspace",
+  "itemCount": 4,
+  "items": [
+    {
+      "path": "C:\\Workspaces\\AuthenticationServiceWorkspace\\Src\\Services\\AuthenticationService\\Program.cs",
+      "targetPath": "C:\\Monorepo\\EnterpriseMonorepo\\Src\\Services\\AuthenticationService\\Program.cs",
+      "linkType": "junction"
+    },
+    {
+      "path": "C:\\Workspaces\\AuthenticationServiceWorkspace\\Src\\Services\\AuthenticationService\\AuthenticationService.csproj",
+      "targetPath": "C:\\Monorepo\\EnterpriseMonorepo\\Src\\Services\\AuthenticationService\\AuthenticationService.csproj",
+      "linkType": "junction"
+    },
+    {
+      "path": "C:\\Workspaces\\AuthenticationServiceWorkspace\\ReferenceCode\\Core\\Utilities\\StringHelper.cs",
+      "targetPath": "C:\\Monorepo\\EnterpriseMonorepo\\Src\\Core\\Utilities\\StringHelper.cs",
+      "linkType": "hardlink"
+    },
+    {
+      "path": "C:\\Workspaces\\AuthenticationServiceWorkspace\\Documentation\\authentication-guide.md",
+      "targetPath": "C:\\Monorepo\\EnterpriseMonorepo\\Documentation\\authentication-guide.md",
+      "linkType": "none"
+    }
+  ]
+}
+```
+
+### Using Audit Reports for Build Commands
+
+Once you have the audit report, you can use it to identify the source repository location for running build commands:
+
+**Example Workflow:**
+
+1. **Run the audit** to generate the link map
+2. **Open the report** in VS Code
+3. **Find your project file** (e.g., `AuthenticationService.csproj`)
+4. **Note the targetPath** (e.g., `C:\Monorepo\EnterpriseMonorepo\Src\Services\AuthenticationService`)
+5. **Run build commands** in the source location:
+
+```powershell
+# Navigate to the source repository location from the audit report
+cd "C:\Monorepo\EnterpriseMonorepo\Src\Services\AuthenticationService"
+
+# Run build commands against the source
+msbuild AuthenticationService.csproj /p:Configuration=Release
+
+# Or use dotnet CLI
+dotnet build AuthenticationService.csproj
+```
+
+**AI Agent Integration:**
+
+You can instruct AI coding agents to:
+1. Read the link audit report
+2. Extract the `targetPath` for specific files
+3. Navigate to that location
+4. Execute build or test commands
+
+**Example AI Prompt:**
+```
+Read .filesystem-link-manager/link-audit-report.json, find the targetPath 
+for AuthenticationService.csproj, navigate to its parent directory, and run 
+msbuild with Release configuration.
+```
+
+### Link Type Classifications
+
+- **`symlink`**: Symbolic link to a file
+- **`junction`**: Windows directory junction (symlinked directory)
+- **`hardlink`**: Hard link to a file (shares the same inode)
+- **`none`**: Regular file (copied, not linked, not determined)
 
 ## 🎮 Command Usage
 

@@ -149,6 +149,90 @@ describe('file-discovery.service', () => {
             expect(mockDiscoverDirectoriesWithPath).toHaveBeenCalledWith(baseDirectoryPath, 'src');
             expect(mockNormalizeDirectoryPaths).toHaveBeenCalledWith(expectedDirs);
         });
+
+        test('should normalize path mapping entry to source path when discovering files', async () => {
+            // Arrange
+            const baseDirectoryPath = '/test/base';
+            const searchPatterns: SearchPatternBase[] = [
+                {
+                    patternType: 'path',
+                    pattern: {
+                        sourcePath: 'src/file.ts',
+                        destinationPath: 'lib/file.ts',
+                    },
+                },
+            ];
+            const expectedFiles = ['/test/base/src/file.ts'];
+
+            mockDiscoverFilesWithPath.mockResolvedValue(expectedFiles);
+
+            // Act
+            const result = await serviceUnderTest.discoverFiles(baseDirectoryPath, searchPatterns);
+
+            // Assert
+            expect(result).toEqual(expectedFiles.map(path => path.replaceAll('/', '\\')));
+            expect(mockDiscoverFilesWithPath).toHaveBeenCalledWith(
+                baseDirectoryPath,
+                'src/file.ts'
+            );
+        });
+
+        test('should normalize array of path mapping entries to source paths when discovering files', async () => {
+            // Arrange
+            const baseDirectoryPath = '/test/base';
+            const searchPatterns: SearchPatternBase[] = [
+                {
+                    patternType: 'path',
+                    pattern: [
+                        {
+                            sourcePath: 'src/alpha.ts',
+                            destinationPath: 'lib/alpha.ts',
+                        },
+                        {
+                            sourcePath: 'src/beta.ts',
+                            destinationPath: 'lib/beta.ts',
+                        },
+                    ],
+                },
+            ];
+            const expectedFiles = ['/test/base/src/alpha.ts', '/test/base/src/beta.ts'];
+
+            mockDiscoverFilesWithPath.mockResolvedValue(expectedFiles);
+
+            // Act
+            const result = await serviceUnderTest.discoverFiles(baseDirectoryPath, searchPatterns);
+
+            // Assert
+            expect(result).toEqual(expectedFiles.map(path => path.replaceAll('/', '\\')));
+            expect(mockDiscoverFilesWithPath).toHaveBeenCalledWith(baseDirectoryPath, [
+                'src/alpha.ts',
+                'src/beta.ts',
+            ]);
+        });
+
+        test('should preserve string arrays when discovering files with path patterns', async () => {
+            // Arrange
+            const baseDirectoryPath = '/test/base';
+            const searchPatterns: SearchPatternBase[] = [
+                {
+                    patternType: 'path',
+                    pattern: ['src/alpha.ts', 'src/beta.ts'],
+                },
+            ];
+            const expectedFiles = ['/test/base/src/alpha.ts', '/test/base/src/beta.ts'];
+
+            mockDiscoverFilesWithPath.mockResolvedValue(expectedFiles);
+
+            // Act
+            const result = await serviceUnderTest.discoverFiles(baseDirectoryPath, searchPatterns);
+
+            // Assert
+            expect(result).toEqual(expectedFiles.map(path => path.replaceAll('/', '\\')));
+            expect(mockDiscoverFilesWithPath).toHaveBeenCalledWith(baseDirectoryPath, [
+                'src/alpha.ts',
+                'src/beta.ts',
+            ]);
+        });
     });
 
     describe('File discovery with glob patterns', () => {
@@ -167,7 +251,11 @@ describe('file-discovery.service', () => {
 
             // Assert
             expect(result).toEqual(expectedFiles.map(path => path.replaceAll('/', '\\')));
-            expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(baseDirectoryPath, '**/*.ts');
+            expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(
+                baseDirectoryPath,
+                '**/*.ts',
+                undefined
+            );
         });
 
         test('should discover directories using glob pattern', async () => {
@@ -192,9 +280,64 @@ describe('file-discovery.service', () => {
             expect(result).toEqual(normalizedDirs);
             expect(mockDiscoverDirectoriesWithGlob).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                '**/src'
+                '**/src',
+                undefined
             );
             expect(mockNormalizeDirectoryPaths).toHaveBeenCalledWith(expectedDirs);
+        });
+
+        test('should forward followSymbolicLinks option to directory glob discovery', async () => {
+            // Arrange
+            const baseDirectoryPath = '/test/base';
+            const searchPatterns: SearchPatternBase[] = [
+                { patternType: 'glob', pattern: '**/src' },
+            ];
+            const expectedDirs = ['/external/src'];
+            const normalizedDirs = ['/external/src'];
+
+            mockDiscoverDirectoriesWithGlob.mockResolvedValue(expectedDirs);
+            mockNormalizeDirectoryPaths.mockReturnValue(normalizedDirs);
+
+            // Act
+            const result = await serviceUnderTest.discoverDirectories(
+                baseDirectoryPath,
+                searchPatterns,
+                {
+                    followSymbolicLinks: true,
+                }
+            );
+
+            // Assert
+            expect(result).toEqual(normalizedDirs);
+            expect(mockDiscoverDirectoriesWithGlob).toHaveBeenCalledWith(
+                baseDirectoryPath,
+                '**/src',
+                {
+                    followSymbolicLinks: true,
+                }
+            );
+        });
+
+        test('should forward followSymbolicLinks option to glob discovery', async () => {
+            // Arrange
+            const baseDirectoryPath = '/test/base';
+            const searchPatterns: SearchPatternBase[] = [
+                { patternType: 'glob', pattern: '**/*.ts' },
+            ];
+            const expectedFiles = ['/external/file.ts'];
+
+            mockDiscoverFilesWithGlob.mockResolvedValue(expectedFiles);
+
+            // Act
+            const result = await serviceUnderTest.discoverFiles(baseDirectoryPath, searchPatterns, {
+                followSymbolicLinks: true,
+            });
+
+            // Assert
+            expect(result).toEqual(expectedFiles.map(path => path.replaceAll('/', '\\')));
+            expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(baseDirectoryPath, '**/*.ts', {
+                followSymbolicLinks: true,
+            });
         });
     });
 
@@ -216,7 +359,7 @@ describe('file-discovery.service', () => {
 
             // Assert
             expect(result).toEqual(regexResults.map(path => path.replaceAll('/', '\\')));
-            expect(mockDiscoverAllFiles).toHaveBeenCalledWith(baseDirectoryPath);
+            expect(mockDiscoverAllFiles).toHaveBeenCalledWith(baseDirectoryPath, undefined);
             expect(mockProcessRegexPattern).toHaveBeenCalledWith(
                 allFiles,
                 '.*\\.test\\.ts$',
@@ -247,7 +390,7 @@ describe('file-discovery.service', () => {
 
             // Assert
             expect(result).toEqual(normalizedDirs);
-            expect(mockDiscoverAllDirectories).toHaveBeenCalledWith(baseDirectoryPath);
+            expect(mockDiscoverAllDirectories).toHaveBeenCalledWith(baseDirectoryPath, undefined);
             expect(mockProcessRegexPattern).toHaveBeenCalledWith(
                 allDirs,
                 '.*test.*',
@@ -286,7 +429,8 @@ describe('file-discovery.service', () => {
             );
             expect(mockDiscoverFilesWithIgnore).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                parsedRules.ignorePatterns
+                parsedRules.ignorePatterns,
+                undefined
             );
         });
 
@@ -319,11 +463,13 @@ describe('file-discovery.service', () => {
             expect(uniqueResult).toEqual(uniqueExpected);
             expect(mockDiscoverFilesWithIgnore).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                parsedRules.ignorePatterns
+                parsedRules.ignorePatterns,
+                undefined
             );
             expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                'important.log'
+                'important.log',
+                undefined
             );
         });
 
@@ -356,11 +502,13 @@ describe('file-discovery.service', () => {
             expect(result).toEqual(normalizedDirs);
             expect(mockDiscoverDirectoriesWithIgnore).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                parsedRules.ignorePatterns
+                parsedRules.ignorePatterns,
+                undefined
             );
             expect(mockDiscoverDirectoriesWithGlob).toHaveBeenCalledWith(
                 baseDirectoryPath,
-                '**/temp/keep'
+                '**/temp/keep',
+                undefined
             );
             expect(mockNormalizeDirectoryPaths).toHaveBeenCalledWith(
                 expect.arrayContaining([...ignoredDirs, ...negatedDirs])
@@ -451,7 +599,11 @@ describe('file-discovery.service', () => {
                 baseDirectoryPath,
                 'src/file1.ts'
             );
-            expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(baseDirectoryPath, '**/*.js');
+            expect(mockDiscoverFilesWithGlob).toHaveBeenCalledWith(
+                baseDirectoryPath,
+                '**/*.js',
+                undefined
+            );
         });
 
         test('should process multiple patterns and combine results for directories', async () => {

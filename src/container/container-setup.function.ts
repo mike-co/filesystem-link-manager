@@ -9,6 +9,7 @@ import { CommandExecutorService } from '../symlink-creation/execution';
 import { AttributeAdjustmentService } from '../symlink-creation/file-attribute';
 import { LinkManagerService } from '../symlink-creation/linking';
 import { WorkflowOrchestratorService } from '../symlink-creation/workflow';
+import { LinkAuditService } from '../link-audit';
 
 /**
  * Sets up and configures the dependency injection container with all required services.
@@ -39,6 +40,7 @@ export function setupContainer(context: ExtensionContext): DependencyContainer {
     container.registerSingleton(LinkManagerService);
     container.registerSingleton(AttributeAdjustmentService);
     container.registerSingleton(WorkflowOrchestratorService);
+    container.registerSingleton(LinkAuditService);
     
     return container;
 }

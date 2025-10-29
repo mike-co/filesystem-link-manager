@@ -1,8 +1,8 @@
-import { isAbsolute, relative, resolve } from 'path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { Progress, window } from 'vscode';
 import { DomainError } from '../../../common';
 import { LoggerService } from '../../../logging';
-import { FileAttributeAdjustment, FileSystemAction, FileSystemItemType, FileSystemOperationConfig } from '../../config';
+import { FileAttributeAdjustment, FileSystemAction, FileSystemItemType, FileSystemOperationConfig, isPathMappingEntry } from '../../config';
 import { CopyManagerService, CopyOperationResult } from '../../copying';
 import { FileDiscoveryService } from '../../discovery';
 import { CommandExecutorService } from '../../execution';
@@ -602,28 +602,132 @@ async function discoverOperations(
 
     // Discover all files and directories from each source
     for (const source of operations) {
-        const sourcePaths = new Set<string>();
+        const sourcePaths = new Map<string, Set<string | undefined>>();
+        const addSourcePath = (path: string, destinationOverride: string | undefined): void => {
+            const existingOverrides = sourcePaths.get(path);
+            if (existingOverrides) {
+                existingOverrides.add(destinationOverride);
+                return;
+            }
+
+            const overrides = new Set<string | undefined>();
+            overrides.add(destinationOverride);
+            sourcePaths.set(path, overrides);
+        };
 
         if (source.itemType === 'file') {
             // Discover files matching search patterns
-            const discoveredFiles = await fileDiscoveryService.discoverFiles(
-                source.baseDirectoryPath,
-                source.searchPatterns
-            );
-            discoveredFiles.forEach(file => sourcePaths.add(file));
+            const regularPatterns: typeof source.searchPatterns = [];
+            const pathMappingEntries: Array<{
+                entry: { sourcePath: string; destinationPath: string };
+                basePattern: typeof source.searchPatterns[number];
+            }> = [];
 
-            logger.debug('Discovered files for operation', {
-                operation: 'executeWorkflow',
-                filePath: source.baseDirectoryPath,
-                processedCount: discoveredFiles.length,
-            });
+            for (const searchPattern of source.searchPatterns ?? []) {
+                if (searchPattern.patternType !== 'path') {
+                    regularPatterns.push(searchPattern);
+                    continue;
+                }
+
+                const stringsForPattern: string[] = [];
+                const patternValue = searchPattern.pattern;
+
+                if (typeof patternValue === 'string') {
+                    stringsForPattern.push(patternValue);
+                }
+                else if (Array.isArray(patternValue)) {
+                    for (const value of patternValue) {
+                        if (typeof value === 'string') {
+                            stringsForPattern.push(value);
+                        }
+                        else if (isPathMappingEntry(value)) {
+                            pathMappingEntries.push({
+                                entry: value,
+                                basePattern: searchPattern,
+                            });
+                        }
+                    }
+                }
+                else if (isPathMappingEntry(patternValue)) {
+                    pathMappingEntries.push({
+                        entry: patternValue,
+                        basePattern: searchPattern,
+                    });
+                }
+
+                if (stringsForPattern.length > 0) {
+                    let normalizedPattern: string | string[];
+                    if (stringsForPattern.length === 1) {
+                        const singlePattern = stringsForPattern[0];
+                        if (singlePattern === undefined) {
+                            continue;
+                        }
+                        normalizedPattern = singlePattern;
+                    } else {
+                        normalizedPattern = stringsForPattern;
+                    }
+
+                    regularPatterns.push({
+                        ...searchPattern,
+                        pattern: normalizedPattern,
+                    });
+                }
+            }
+
+            if (regularPatterns.length > 0) {
+                const discoveredFiles = await fileDiscoveryService.discoverFiles(
+                    source.baseDirectoryPath,
+                    regularPatterns
+                );
+                for (const file of discoveredFiles) {
+                    addSourcePath(file, undefined);
+                }
+
+                logger.debug('Discovered files for operation', {
+                    operation: 'executeWorkflow',
+                    filePath: source.baseDirectoryPath,
+                    processedCount: discoveredFiles.length,
+                });
+            }
+
+            for (const { entry, basePattern } of pathMappingEntries) {
+                const mappingPattern = {
+                    ...basePattern,
+                    pattern: entry,
+                };
+
+                const discoveredFiles = await fileDiscoveryService.discoverFiles(
+                    source.baseDirectoryPath,
+                    [mappingPattern]
+                );
+
+                const destinationOverride = resolve(
+                    config.targetDirectoryPath,
+                    source.destinationPath ?? '',
+                    entry.destinationPath
+                );
+
+                for (const file of discoveredFiles) {
+                    addSourcePath(file, destinationOverride);
+                }
+
+                logger.debug('Discovered path mapping entries for operation', {
+                    operation: 'executeWorkflow',
+                    filePath: source.baseDirectoryPath,
+                    processedCount: discoveredFiles.length,
+                    mappingSourcePath: entry.sourcePath,
+                    destinationOverride,
+                });
+            }
         } else if (source.itemType === 'directory') {
             if (source.searchPatterns) {
                 const directoriesToLink = await fileDiscoveryService.discoverDirectories(
                     source.baseDirectoryPath,
                     source.searchPatterns
                 );
-                directoriesToLink.forEach(dir => sourcePaths.add(dir));
+                directoriesToLink.forEach(dir => {
+                    addSourcePath(dir, undefined);
+                });
                 logger.debug('Added directories for operation from searchPatterns', {
                     operation: 'executeWorkflow',
                     filePath: source.baseDirectoryPath,
@@ -633,17 +737,27 @@ async function discoverOperations(
         }
 
         if (sourcePaths.size > 0) {
-            for (const sourcePath of sourcePaths) {
+            for (const [sourcePath, destinationOverrides] of sourcePaths) {
+                if (destinationOverrides.size === 0) {
+                    destinationOverrides.add(undefined);
+                }
+
                 const relativePath = relative(source.baseDirectoryPath, sourcePath);
-                // Combine with target directory to get final target path
-                const destinationPath = resolve(config.targetDirectoryPath, source.destinationPath ?? '', relativePath);
-                discoveredOperations.push({
-                    itemType: source.itemType,
-                    action: source.action,
-                    destinationPath,
-                    sourcePath,
-                    fileAttributeAdjustment: source.fileAttributeAdjustment
-                });
+                for (const destinationOverride of destinationOverrides) {
+                    // Combine with target directory to get final target path
+                    const destinationPath = destinationOverride ?? resolve(
+                        config.targetDirectoryPath,
+                        source.destinationPath ?? '',
+                        relativePath
+                    );
+                    discoveredOperations.push({
+                        itemType: source.itemType,
+                        action: source.action,
+                        destinationPath,
+                        sourcePath,
+                        fileAttributeAdjustment: source.fileAttributeAdjustment
+                    });
+                }
             }
         }
     }

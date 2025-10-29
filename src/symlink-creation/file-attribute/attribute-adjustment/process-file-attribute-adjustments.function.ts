@@ -1,5 +1,5 @@
 import { pathExists } from 'fs-extra';
-import { isAbsolute, resolve } from 'path';
+import { isAbsolute, resolve } from 'node:path';
 import { DomainError } from '../../../common';
 import { LoggerService, LogContext } from '../../../logging';
 import { discoverAllFiles } from '../../discovery';

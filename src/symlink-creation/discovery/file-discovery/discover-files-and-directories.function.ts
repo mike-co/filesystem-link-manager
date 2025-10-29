@@ -1,6 +1,7 @@
 import fg from 'fast-glob';
 import { pathExists, stat } from 'fs-extra';
-import { isAbsolute, resolve } from 'path';
+import { isAbsolute, resolve } from 'node:path';
+import type { FileDiscoveryOptions } from '../types/file-discovery-options.interface';
 import { FileSystemItemType } from '../../config';
 
 /**
@@ -14,11 +15,12 @@ import { FileSystemItemType } from '../../config';
 async function discoverInternal(
     baseDirectoryPath: string,
     pattern: string | string[],
-    extraOptions: fg.Options = {}
+    extraOptions: fg.Options = {},
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Normalize path for cross-platform compatibility
     const normalizedBasePath = resolve(baseDirectoryPath);
-    const paths = await fg(pattern, {
+    const globOptions: fg.Options = {
         caseSensitiveMatch: false, // Match files case-insensitively (cross-platform consistency)
         baseNameMatch: true,       // Match patterns against filenames only, not full paths
         absolute: true,            // Return absolute file paths
@@ -35,7 +37,13 @@ async function discoverInternal(
         stats: false,              // Do not include file stats (performance)
         cwd: normalizedBasePath,
         ...extraOptions,
-    });
+    };
+
+    if (options && typeof options.followSymbolicLinks === 'boolean') {
+        globOptions.followSymbolicLinks = options.followSymbolicLinks;
+    }
+
+    const paths = await fg(pattern, globOptions);
     return paths.map(path => resolve(path));
 }
 
@@ -49,13 +57,14 @@ async function discoverInternal(
  */
 export async function discoverFilesWithGlob(
     baseDirectoryPath: string,
-    globPattern: string
+    globPattern: string,
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Use fast-glob for glob patterns with comprehensive options optimized for performance
     return discoverInternal(baseDirectoryPath, globPattern, {
         braceExpansion: true,
         extglob: true
-    });
+    }, options);
 }
 
 /**
@@ -65,9 +74,12 @@ export async function discoverFilesWithGlob(
  * @param baseDirectoryPath - Base directory path to search for files
  * @returns Promise resolving to array of all file paths
  */
-export async function discoverAllFiles(baseDirectoryPath: string): Promise<string[]> {
+export async function discoverAllFiles(
+    baseDirectoryPath: string,
+    options?: FileDiscoveryOptions
+): Promise<string[]> {
     // Use fast-glob to get all files for regex filtering with performance optimizations
-    return discoverInternal(baseDirectoryPath, '**/*');
+    return discoverInternal(baseDirectoryPath, '**/*', {}, options);
 }
 
 /**
@@ -80,12 +92,13 @@ export async function discoverAllFiles(baseDirectoryPath: string): Promise<strin
  */
 export async function discoverFilesWithIgnore(
     baseDirectoryPath: string,
-    ignorePatterns: string[]
+    ignorePatterns: string[],
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Find all files excluding the ignore patterns with performance optimizations
     return discoverInternal(baseDirectoryPath, '**/*', {
         ignore: ignorePatterns,
-    });
+    }, options);
 }
 
 /**
@@ -98,14 +111,15 @@ export async function discoverFilesWithIgnore(
  */
 export async function discoverDirectoriesWithGlob(
     baseDirectoryPath: string,
-    globPattern: string
+    globPattern: string,
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Use fast-glob for glob patterns with comprehensive options optimized for performance
     return discoverInternal(baseDirectoryPath, globPattern, {
         braceExpansion: true,
         extglob: true,
         onlyDirectories: true
-    });
+    }, options);
 }
 
 /**
@@ -117,12 +131,13 @@ export async function discoverDirectoriesWithGlob(
  * @returns Promise resolving to array of discovered directory paths
  */
 export async function discoverAllDirectories(
-    baseDirectoryPath: string
+    baseDirectoryPath: string,
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Use fast-glob for glob patterns with comprehensive options optimized for performance
     return discoverInternal(baseDirectoryPath, '**/*', {
         onlyDirectories: true
-    });
+    }, options);
 }
 
 /**
@@ -135,13 +150,14 @@ export async function discoverAllDirectories(
  */
 export async function discoverDirectoriesWithIgnore(
     baseDirectoryPath: string,
-    ignorePatterns: string[]
+    ignorePatterns: string[],
+    options?: FileDiscoveryOptions
 ): Promise<string[]> {
     // Find all files excluding the ignore patterns with performance optimizations
     return discoverInternal(baseDirectoryPath, '**/*', {
         ignore: ignorePatterns,
         onlyDirectories: true
-    });
+    }, options);
 }
 
 /**
